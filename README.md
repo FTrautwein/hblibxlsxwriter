@@ -1,2 +1,2 @@
-# hblibxlwxwriter
+# hblibxlsxwriter
 libxlsxwriter wrappers for Harbour
