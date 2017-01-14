@@ -19,83 +19,6 @@
 
 STATIC nHDll
 
-/** @brief Struct to represent a date and time in Excel.
- *
- * Struct to represent a date and time in Excel. See @ref working_with_dates.
- */
-    /** Year     : 1900 - 9999 */
-    /** Month    : 1 - 12 */
-    /** Day      : 1 - 31 */
-    /** Hour     : 0 - 23 */
-    /** Minute   : 0 - 59 */
-    /** Seconds  : 0 - 59.999 */
-pragma pack(8) 
-typedef struct lxw_datetime {;
-    int year;
-    int month;
-    int day;
-    int hour;
-    int min;
-    DOUBLE sec;
-} lxw_datetime;
-
-/**
- * @brief Workbook options.
- *
- * Optional parameters when creating a new Workbook object via
- * workbook_new_opt().
- *
- * The following properties are supported:
- *
- * - `constant_memory`: Reduces the amount of data stored in memory so that
- *   large files can be written efficiently.
- *
- *   @note In this mode a row of data is written and then discarded when a
- *   cell in a new row is added via one of the `worksheet_write_*()`
- *   functions. Therefore, once this option is active, data should be written in
- *   sequential row order. For this reason the `worksheet_merge_range()`
- *   doesn't work in this mode. See also @ref ww_mem_constant.
- *
- * - `tmpdir`: libxlsxwriter stores workbook data in temporary files prior
- *   to assembling the final XLSX file. The temporary files are created in the
- *   system's temp directory. If the default temporary directory isn't
- *   accessible to your application, or doesn't contain enough space, you can
- *   specify an alternative location using the `tempdir` option.
- */
-pragma pack(8) 
-typedef struct lxw_workbook_options {;
-    UCHAR constant_memory;
-    LPCSTR tmpdir;
-} lxw_workbook_options;
-
-/**
- * Workbook document properties.
- */
-    /** The title of the Excel Document. */
-    /** The subject of the Excel Document. */
-    /** The author of the Excel Document. */
-    /** The manager field of the Excel Document. */
-    /** The company field of the Excel Document. */
-    /** The category of the Excel Document. */
-    /** The keywords of the Excel Document. */
-    /** The comment field of the Excel Document. */
-    /** The status of the Excel Document. */
-    /** The hyperlink base url of the Excel Document. */
-pragma pack(8) 
-typedef struct lxw_doc_properties {;
-    LPCSTR title;
-    LPCSTR subject;
-    LPCSTR author;
-    LPCSTR manager;
-    LPCSTR company;
-    LPCSTR category;
-    LPCSTR keywords;
-    LPCSTR comments;
-    LPCSTR status;
-    LPCSTR hyperlink_base;
-    int created;
-} lxw_doc_properties;
-
 FUNCTION lxw_init() 
 nHDll:= hb_libLoad( "libxlsxwriter.dll" )
 RETURN Nil
@@ -2221,7 +2144,41 @@ RETURN CallDll( "worksheet_set_footer", worksheet, string )
  *
  */
 FUNCTION lxw_worksheet_set_h_pagebreaks(worksheet, breaks )
-RETURN CallDll( "worksheet_set_h_pagebreaks", worksheet, breaks )
+LOCAL oBreaks, pBreaks
+oBreaks := hb_CStructure( "LXW_ARRAY_INT_10" ):Buffer()
+IF LEN( breaks ) > 0
+   oBreaks:element1:= breaks[1]
+ENDIF
+IF LEN( breaks ) > 1
+   oBreaks:element2:= breaks[2]
+ENDIF
+IF LEN( breaks ) > 2
+   oBreaks:element3:= breaks[3]
+ENDIF
+IF LEN( breaks ) > 3
+   oBreaks:element4:= breaks[4]
+ENDIF
+IF LEN( breaks ) > 4
+   oBreaks:element5:= breaks[5]
+ENDIF
+IF LEN( breaks ) > 5
+   oBreaks:element6:= breaks[6]
+ENDIF
+IF LEN( breaks ) > 6
+   oBreaks:element7:= breaks[7]
+ENDIF
+IF LEN( breaks ) > 7
+   oBreaks:element8:= breaks[8]
+ENDIF
+IF LEN( breaks ) > 8
+   oBreaks:element9:= breaks[9]
+ENDIF
+IF LEN( breaks ) > 9
+   oBreaks:element10:= breaks[10]
+ENDIF
+pBreaks:= oBreaks:GetPointer()
+RETURN CallDll( "worksheet_set_h_pagebreaks", worksheet, pBreaks )
+//RETURN hb_DynCall( { "worksheet_set_h_pagebreaks", nHDll, HB_DYN_CALLCONV_SYSCALL, , HB_DYN_CTYPE_STRUCTURE, HB_DYN_CTYPE_STRUCTURE }, worksheet, breaks )
 
 /**
  * @brief Set the vertical page breaks on a worksheet.
@@ -3593,3 +3550,1358 @@ RETURN CallDll( "lxw_name_to_row_2", row_str )
 
 FUNCTION lxw_name_to_col_2( col_str)
 RETURN CallDll( "lxw_name_to_col_2", col_str )
+
+
+
+// CHART ==============================================================================================================
+
+
+
+/**
+ * @brief Add a data series to a chart.
+ *
+ * @param chart      Pointer to a lxw_chart instance to be configured.
+ * @param categories The range of categories in the data series.
+ * @param values     The range of values in the data series.
+ *
+ * @return A lxw_chart_series object pointer.
+ *
+ * In Excel a chart **series** is a collection of information that defines
+ * which data is plotted such as the categories and values. It is also used to
+ * define the formatting for the data.
+ *
+ * For an libxlsxwriter chart object the `%chart_add_series()` function is
+ * used to set the categories and values of the series:
+ *
+ * @code
+ *     chart_add_series(chart, "=Sheet1!$A$2:$A$7", "=Sheet1!$C$2:$C$7");
+ * @endcode
+ *
+ *
+ * The series parameters are:
+ *
+ * - `categories`: This sets the chart category labels. The category is more
+ *   or less the same as the X axis. In most Excel chart types the
+ *   `categories` property is optional and the chart will just assume a
+ *   sequential series from `1..n`:
+ *
+ * @code
+ *     // The NULL category will default to 1 to 5 like in Excel.
+ *     chart_add_series(chart, NULL, "Sheet1!$A$1:$A$5");
+ * @endcode
+ *
+ *  - `values`: This is the most important property of a series and is the
+ *    only mandatory option for every chart object. This parameter links the
+ *    chart with the worksheet data that it displays.
+ *
+ * The `categories` and `values` should be a string formula like
+ * `"=Sheet1!$A$2:$A$7"` in the same way it is represented in Excel. This is
+ * convenient when recreating a chart from an example in Excel but it is
+ * trickier to generate programmatically. For these cases you can set the
+ * `categories` and `values` to `NULL` and use the
+ * `chart_series_set_categories()` and `chart_series_set_values()` functions:
+ *
+ * @code
+ *     lxw_chart_series *series = chart_add_series(chart, NULL, NULL);
+ *
+ *     // Configure the series using a syntax that is easier to define programmatically.
+ *     chart_series_set_categories(series, "Sheet1", 1, 0, 6, 0); // "=Sheet1!$A$2:$A$7"
+ *     chart_series_set_values(    series, "Sheet1", 1, 2, 6, 2); // "=Sheet1!$C$2:$C$7"
+ * @endcode
+ *
+ * As shown in the previous example the return value from
+ * `%chart_add_series()` is a lxw_chart_series pointer. This can be used in
+ * other functions that configure a series.
+ *
+ *
+ * More than one series can be added to a chart. The series numbering and
+ * order in the Excel chart will be the same as the order in which they are
+ * added in libxlsxwriter:
+ *
+ * @code
+ *    chart_add_series(chart, NULL, "Sheet1!$A$1:$A$5");
+ *    chart_add_series(chart, NULL, "Sheet1!$B$1:$B$5");
+ *    chart_add_series(chart, NULL, "Sheet1!$C$1:$C$5");
+ * @endcode
+ *
+ * It is also possible to specify non-contiguous ranges:
+ *
+ * @code
+ *    chart_add_series(
+ *        chart,
+ *        "=(Sheet1!$A$1:$A$9,Sheet1!$A$14:$A$25)",
+ *        "=(Sheet1!$B$1:$B$9,Sheet1!$B$14:$B$25)"
+ *    );
+ * @endcode
+ *
+ */
+FUNCTION lxw_chart_add_series(chart, categories, values)
+RETURN CallDll( "chart_add_series", chart, categories, values )
+
+/**
+ * @brief Set a series "categories" range using row and column values.
+ *
+ * @param series    A series object created via `chart_add_series()`.
+ * @param sheetname The name of the worksheet that contains the data range.
+ * @param first_row The first row of the range. (All zero indexed.)
+ * @param first_col The first column of the range.
+ * @param last_row  The last row of the range.
+ * @param last_col  The last col of the range.
+ *
+ * The `categories` and `values` of a chart data series are generally set
+ * using the `chart_add_series()` function and Excel range formulas like
+ * `"=Sheet1!$A$2:$A$7"`.
+ *
+ * The `%chart_series_set_categories()` function is an alternative method that
+ * is easier to generate programmatically. It requires that you set the
+ * `categories` and `values` parameters in `chart_add_series()`to `NULL` and
+ * then set them using row and column values in
+ * `chart_series_set_categories()` and `chart_series_set_values()`:
+ *
+ * @code
+ *     lxw_chart_series *series = chart_add_series(chart, NULL, NULL);
+ *
+ *     // Configure the series ranges programmatically.
+ *     chart_series_set_categories(series, "Sheet1", 1, 0, 6, 0); // "=Sheet1!$A$2:$A$7"
+ *     chart_series_set_values(    series, "Sheet1", 1, 2, 6, 2); // "=Sheet1!$C$2:$C$7"
+ * @endcode
+ *
+ */
+FUNCTION lxw_chart_series_set_categories(series, sheetname, first_row, first_col, last_row, last_col)
+RETURN CallDll( "chart_series_set_categories", series, sheetname, first_row, first_col, last_row, last_col )
+
+/**
+ * @brief Set a series "values" range using row and column values.
+ *
+ * @param series    A series object created via `chart_add_series()`.
+ * @param sheetname The name of the worksheet that contains the data range.
+ * @param first_row The first row of the range. (All zero indexed.)
+ * @param first_col The first column of the range.
+ * @param last_row  The last row of the range.
+ * @param last_col  The last col of the range.
+ *
+ * The `categories` and `values` of a chart data series are generally set
+ * using the `chart_add_series()` function and Excel range formulas like
+ * `"=Sheet1!$A$2:$A$7"`.
+ *
+ * The `%chart_series_set_values()` function is an alternative method that is
+ * easier to generate programmatically. See the documentation for
+ * `chart_series_set_categories()` above.
+ */
+FUNCTION lxw_chart_series_set_values(series, sheetname, first_row, first_col, last_row, last_col)
+RETURN CallDll( "chart_series_set_values", series, sheetname, first_row, first_col, last_row, last_col )
+
+/**
+ * @brief Set the name of a chart series range.
+ *
+ * @param series A series object created via `chart_add_series()`.
+ * @param name   The series name.
+ *
+ * The `%chart_series_set_name` function is used to set the name for a chart
+ * data series. The series name in Excel is displayed in the chart legend and
+ * in the formula bar. The name property is optional and if it isn't supplied
+ * it will default to `Series 1..n`.
+ *
+ * The function applies to a #lxw_chart_series object created using
+ * `chart_add_series()`:
+ *
+ * @code
+ *     lxw_chart_series *series = chart_add_series(chart, NULL, "=Sheet1!$B$2:$B$7");
+ *
+ *     chart_series_set_name(series, "Quarterly budget data");
+ * @endcode
+ *
+ * The name parameter can also be a formula such as `=Sheet1!$A$1` to point to
+ * a cell in the workbook that contains the name:
+ *
+ * @code
+ *     lxw_chart_series *series = chart_add_series(chart, NULL, "=Sheet1!$B$2:$B$7");
+ *
+ *     chart_series_set_name(series, "=Sheet1!$B1$1");
+ * @endcode
+ *
+ * See also the `chart_series_set_name_range()` function to see how to set the
+ * name formula programmatically.
+ */
+FUNCTION lxw_chart_series_set_name(series, name)
+RETURN CallDll( "chart_series_set_name", series, name )
+
+/**
+ * @brief Set a series name formula using row and column values.
+ *
+ * @param series    A series object created via `chart_add_series()`.
+ * @param sheetname The name of the worksheet that contains the cell range.
+ * @param row       The zero indexed row number of the range.
+ * @param col       The zero indexed column number of the range.
+ *
+ * The `%chart_series_set_name_range()` function can be used to set a series
+ * name range and is an alternative to using `chart_series_set_name()` and a
+ * string formula:
+ *
+ * @code
+ *     lxw_chart_series *series = chart_add_series(chart, NULL, "=Sheet1!$B$2:$B$7");
+ *
+ *     chart_series_set_name_range(series, "Sheet1", 0, 2); // "=Sheet1!$C$1"
+ * @endcode
+ */
+FUNCTION lxw_chart_series_set_name_range(series, sheetname, row, col)
+RETURN CallDll( "chart_series_set_name_range", series, sheetname, row, col)
+
+/**
+ * @brief Set the line properties for a chart series.
+ *
+ * @param series A series object created via `chart_add_series()`.
+ * @param line   A #lxw_chart_line struct.
+ *
+ * Set the line/border properties of a chart series:
+ *
+ * @code
+ *     lxw_chart_line line = {.color = LXW_COLOR_RED};
+ *
+ *     chart_series_set_line(series1, &line);
+ *     chart_series_set_line(series2, &line);
+ *     chart_series_set_line(series3, &line);
+ * @endcode
+ *
+ * @image html chart_series_set_line.png
+ *
+ * For more information see @ref chart_lines.
+ */
+FUNCTION lxw_chart_series_set_line(series, line)
+LOCAL pLine
+pLine:= lxw_prepare_chart_line(line)
+RETURN CallDll( "chart_series_set_line", series, pLine )
+
+/**
+ * @brief Set the fill properties for a chart series.
+ *
+ * @param series A series object created via `chart_add_series()`.
+ * @param fill   A #lxw_chart_fill struct.
+ *
+ * Set the fill properties of a chart series:
+ *
+ * @code
+ *     lxw_chart_fill fill1 = {.color = LXW_COLOR_RED};
+ *     lxw_chart_fill fill2 = {.color = LXW_COLOR_YELLOW};
+ *     lxw_chart_fill fill3 = {.color = LXW_COLOR_GREEN};
+ *
+ *     chart_series_set_fill(series1, &fill1);
+ *     chart_series_set_fill(series2, &fill2);
+ *     chart_series_set_fill(series3, &fill3);
+ * @endcode
+ *
+ * @image html chart_series_set_fill.png
+ *
+ * For more information see @ref chart_fills.
+ */
+FUNCTION lxw_chart_series_set_fill(series, fill)
+RETURN CallDll( "chart_series_set_fill", series, fill )
+
+/**
+ * @brief Set the pattern properties for a chart series.
+ *
+ * @param series  A series object created via `chart_add_series()`.
+ * @param pattern A #lxw_chart_pattern struct.
+ *
+ * Set the pattern properties of a chart series:
+ *
+ * @code
+ *     lxw_chart_pattern pattern1 = {.type = LXW_CHART_PATTERN_SHINGLE,
+ *                                   .fg_color = 0x804000,
+ *                                   .bg_color = 0XC68C53};
+ *
+ *     lxw_chart_pattern pattern2 = {.type = LXW_CHART_PATTERN_HORIZONTAL_BRICK,
+ *                                   .fg_color = 0XB30000,
+ *                                   .bg_color = 0XFF6666};
+ *
+ *     chart_series_set_pattern(series1, &pattern1);
+ *     chart_series_set_pattern(series2, &pattern2);
+ *
+ * @endcode
+ *
+ * @image html chart_pattern.png
+ *
+ * For more information see #lxw_chart_pattern_type and @ref chart_patterns.
+ */
+FUNCTION lxw_chart_series_set_pattern(series, pattern)
+LOCAL  pPattern
+pPattern:= lxw_prepare_chart_pattern(pattern)
+RETURN CallDll( "chart_series_set_pattern", series, pPattern )
+
+/**
+ * @brief Set the data marker type for a series.
+ *
+ * @param series A series object created via `chart_add_series()`.
+ * @param type   The marker type, see #lxw_chart_marker_type.
+ *
+ * In Excel a chart marker is used to distinguish data points in a plotted
+ * series. In general only Line and Scatter and Radar chart types use
+ * markers. The libxlsxwriter chart types that can have markers are:
+ *
+ * - #LXW_CHART_LINE
+ * - #LXW_CHART_SCATTER
+ * - #LXW_CHART_SCATTER_STRAIGHT
+ * - #LXW_CHART_SCATTER_STRAIGHT_WITH_MARKERS
+ * - #LXW_CHART_SCATTER_SMOOTH
+ * - #LXW_CHART_SCATTER_SMOOTH_WITH_MARKERS
+ * - #LXW_CHART_RADAR
+ * - #LXW_CHART_RADAR_WITH_MARKERS
+ *
+ * The chart types with `MARKERS` in the name have markers with default colors
+ * and shapes turned on by default but it is possible using the various
+ * `chart_series_set_marker_xxx()` functions below to change these defaults. It
+ * is also possible to turn on an off markers.
+ *
+ * The `%chart_series_set_marker_type()` function is used to specify the
+ * type of the series marker:
+ *
+ * @code
+ *     chart_series_set_marker_type(series, LXW_CHART_MARKER_DIAMOND);
+ * @endcode
+ *
+ * @image html chart_marker1.png
+ *
+ * The available marker types defined by #lxw_chart_marker_type are:
+ *
+ * - #LXW_CHART_MARKER_AUTOMATIC
+ * - #LXW_CHART_MARKER_NONE
+ * - #LXW_CHART_MARKER_SQUARE
+ * - #LXW_CHART_MARKER_DIAMOND
+ * - #LXW_CHART_MARKER_TRIANGLE
+ * - #LXW_CHART_MARKER_X
+ * - #LXW_CHART_MARKER_STAR
+ * - #LXW_CHART_MARKER_SHORT_DASH
+ * - #LXW_CHART_MARKER_LONG_DASH
+ * - #LXW_CHART_MARKER_CIRCLE
+ * - #LXW_CHART_MARKER_PLUS
+ *
+ * The `#LXW_CHART_MARKER_NONE` type can be used to turn off default markers:
+ *
+ * @code
+ *     chart_series_set_marker_type(series, LXW_CHART_MARKER_NONE);
+ * @endcode
+ *
+ * @image html chart_series_set_marker_none.png
+ *
+ * The `#LXW_CHART_MARKER_AUTOMATIC` type is a special case which turns on a
+ * marker using the default marker style for the particular series. If
+ * automatic is on then other marker properties such as size, line or fill
+ * cannot be set.
+ */
+FUNCTION lxw_chart_series_set_marker_type(series, type)
+RETURN CallDll( "chart_series_set_marker_type", series, type )
+
+/**
+ * @brief Set the size of a data marker for a series.
+ *
+ * @param series A series object created via `chart_add_series()`.
+ * @param size   The size of the marker.
+ *
+ * The `%chart_series_set_marker_size()` function is used to specify the
+ * size of the series marker:
+ *
+ * @code
+ *     chart_series_set_marker_type(series, LXW_CHART_MARKER_CIRCLE);
+ *     chart_series_set_marker_size(series, 10);
+ * @endcode
+ *
+ * @image html chart_series_set_marker_size.png
+ *
+ */
+FUNCTION lxw_chart_series_set_marker_size(series, size)
+RETURN CallDll( "chart_series_set_marker_size", series, size )
+
+/**
+ * @brief Set the line properties for a chart series marker.
+ *
+ * @param series A series object created via `chart_add_series()`.
+ * @param line   A #lxw_chart_line struct.
+ *
+ * Set the line/border properties of a chart marker:
+ *
+ * @code
+ *     lxw_chart_line line = {.color = LXW_COLOR_BLACK};
+ *     lxw_chart_fill fill = {.color = LXW_COLOR_RED};
+ *
+ *     chart_series_set_marker_type(series, LXW_CHART_MARKER_SQUARE);
+ *     chart_series_set_marker_size(series, 8);
+ *
+ *     chart_series_set_marker_line(series, &line);
+ *     chart_series_set_marker_fill(series, &fill);
+ * @endcode
+ *
+ * @image html chart_marker2.png
+ *
+ * For more information see @ref chart_lines.
+ */
+FUNCTION lxw_chart_series_set_marker_line(series, line)
+LOCAL pLine
+pLine:= lxw_prepare_chart_line(line)
+RETURN CallDll( "chart_series_set_marker_line", series, pLine )
+
+/**
+ * @brief Set the fill properties for a chart series marker.
+ *
+ * @param series A series object created via `chart_add_series()`.
+ * @param fill   A #lxw_chart_fill struct.
+ *
+ * Set the fill properties of a chart marker:
+ *
+ * @code
+ *     chart_series_set_marker_fill(series, &fill);
+ * @endcode
+ *
+ * See the example and image above and also see @ref chart_fills.
+ */
+FUNCTION lxw_chart_series_set_marker_fill(series, fill)
+RETURN CallDll( "chart_series_set_marker_fill", series, fill )
+
+/**
+ * @brief Set the pattern properties for a chart series marker.
+ *
+ * @param series  A series object created via `chart_add_series()`.
+ * @param pattern A #lxw_chart_pattern struct.
+ *
+ * Set the pattern properties of a chart marker:
+ *
+ * @code
+ *     chart_series_set_marker_pattern(series, &pattern);
+ * @endcode
+ *
+ * For more information see #lxw_chart_pattern_type and @ref chart_patterns.
+ */
+FUNCTION lxw_chart_series_set_marker_pattern(series, pattern)
+LOCAL  pPattern
+pPattern:= lxw_prepare_chart_pattern(pattern)
+RETURN CallDll( "chart_series_set_marker_pattern", series, pPattern )
+
+/**
+ * @brief Set the name caption of the an axis.
+ *
+ * @param axis A pointer to a chart #lxw_chart_axis object.
+ * @param name The name caption of the axis.
+ *
+ * The `%chart_axis_set_name()` function sets the name (also known as title or
+ * caption) for an axis. It can be used for the X or Y axes. The name is
+ * displayed below an X axis and to the side of a Y axis.
+ *
+ * @code
+ *     chart_axis_set_name(chart->x_axis, "Earnings per Quarter");
+ *     chart_axis_set_name(chart->y_axis, "US Dollars (Millions)");
+ * @endcode
+ *
+ * @image html chart_axis_set_name.png
+ *
+ * The name parameter can also be a formula such as `=Sheet1!$A$1` to point to
+ * a cell in the workbook that contains the name:
+ *
+ * @code
+ *     chart_axis_set_name(chart->x_axis, "=Sheet1!$B1$1");
+ * @endcode
+ *
+ * See also the `chart_axis_set_name_range()` function to see how to set the
+ * name formula programmatically.
+ *
+ * This function is applicable to category, date and value axes.
+ */
+FUNCTION lxw_chart_axis_set_name(axis, name)
+RETURN CallDll( "chart_axis_set_name", axis, name )
+
+/**
+ * @brief Set a chart axis name formula using row and column values.
+ *
+ * @param axis      A pointer to a chart #lxw_chart_axis object.
+ * @param sheetname The name of the worksheet that contains the cell range.
+ * @param row       The zero indexed row number of the range.
+ * @param col       The zero indexed column number of the range.
+ *
+ * The `%chart_axis_set_name_range()` function can be used to set an axis name
+ * range and is an alternative to using `chart_axis_set_name()` and a string
+ * formula:
+ *
+ * @code
+ *     chart_axis_set_name_range(chart->x_axis, "Sheet1", 1, 0);
+ *     chart_axis_set_name_range(chart->y_axis, "Sheet1", 2, 0);
+ * @endcode
+ */
+FUNCTION lxw_chart_axis_set_name_range(axis, sheetname, row, col)
+RETURN CallDll( "chart_axis_set_name_range", axis, sheetname, row, col )
+
+/**
+ * @brief Set the font properties for a chart axis name.
+ *
+ * @param axis A pointer to a chart #lxw_chart_axis object.
+ * @param font A pointer to a chart #lxw_chart_font font struct.
+ *
+ * The `%chart_axis_set_name_font()` function is used to set the font of an
+ * axis name:
+ *
+ * @code
+ *     lxw_chart_font font = {.bold = LXW_TRUE, .color = LXW_COLOR_BLUE};
+ *
+ *     chart_axis_set_name(chart->x_axis, "Yearly data");
+ *     chart_axis_set_name_font(chart->x_axis, &font);
+ * @endcode
+ *
+ * @image html chart_axis_set_name_font.png
+ *
+ * For more information see @ref chart_fonts.
+ */
+FUNCTION lxw_chart_axis_set_name_font(axis, font)
+LOCAL  pFont
+pFont:= lxw_prepare_chart_font(font)
+RETURN CallDll( "chart_axis_set_name_font", axis, pFont )
+
+/**
+ * @brief Set the font properties for the numbers of a chart axis.
+ *
+ * @param axis A pointer to a chart #lxw_chart_axis object.
+ * @param font A pointer to a chart #lxw_chart_font font struct.
+ *
+ * The `%chart_axis_set_num_font()` function is used to set the font of the
+ * numbers on an axis:
+ *
+ * @code
+ *     lxw_chart_font font = {.bold = LXW_TRUE, .color = LXW_COLOR_BLUE};
+ *
+ *     chart_axis_set_num_font(chart->x_axis, &font1);
+ * @endcode
+ *
+ * @image html chart_axis_set_num_font.png
+ *
+ * For more information see @ref chart_fonts.
+ */
+FUNCTION lxw_chart_axis_set_num_font(axis, font)
+LOCAL  pFont
+pFont:= lxw_prepare_chart_font(font)
+RETURN CallDll( "chart_axis_set_num_font", axis, pFont )
+
+/**
+ * @brief Set the line properties for a chart axis.
+ *
+ * @param axis A pointer to a chart #lxw_chart_axis object.
+ * @param line A #lxw_chart_line struct.
+ *
+ * Set the line properties of a chart axis:
+ *
+ * @code
+ *     // Hide the Y axis.
+ *     lxw_chart_line line = {.none = LXW_TRUE};
+ *
+ *     chart_axis_set_line(chart->y_axis, &line);
+ * @endcode
+ *
+ * @image html chart_axis_set_line.png
+ *
+ * For more information see @ref chart_lines.
+ */
+FUNCTION lxw_chart_axis_set_line(axis, line)
+LOCAL pLine
+pLine:= lxw_prepare_chart_line(line)
+RETURN CallDll( "chart_axis_set_line", axis, pLine )
+
+/**
+ * @brief Set the fill properties for a chart axis.
+ *
+ * @param axis A pointer to a chart #lxw_chart_axis object.
+ * @param fill A #lxw_chart_fill struct.
+ *
+ * Set the fill properties of a chart axis:
+ *
+ * @code
+ *     lxw_chart_fill fill = {.color = LXW_COLOR_YELLOW};
+ *
+ *     chart_axis_set_fill(chart->y_axis, &fill);
+ * @endcode
+ *
+ * @image html chart_axis_set_fill.png
+ *
+ * For more information see @ref chart_fills.
+ */
+FUNCTION lxw_chart_axis_set_fill(axis, fill)
+RETURN CallDll( "chart_axis_set_fill", axis, fill )
+
+/**
+ * @brief Set the pattern properties for a chart axis.
+ *
+ * @param axis    A pointer to a chart #lxw_chart_axis object.
+ * @param pattern A #lxw_chart_pattern struct.
+ *
+ * Set the pattern properties of a chart axis:
+ *
+ * @code
+ *     chart_axis_set_pattern(chart->y_axis, &pattern);
+ * @endcode
+ *
+ * For more information see #lxw_chart_pattern_type and @ref chart_patterns.
+ */
+FUNCTION lxw_chart_axis_set_pattern(axis, pattern)
+LOCAL pPattern
+pPattern:= lxw_prepare_chart_pattern(pattern)
+RETURN CallDll( "chart_axis_set_pattern", axis, pPattern )
+
+/**
+ * @brief Reverse the order of the axis categories or values.
+ *
+ * @param axis A pointer to a chart #lxw_chart_axis object.
+ *
+ * Reverse the order of the axis categories or values:
+ *
+ * @code
+ *     chart_axis_set_reverse(chart->x_axis);
+ * @endcode
+ *
+ * @image html chart_reverse.png
+ *
+ * Applicable to category, date and value axes.
+ */
+FUNCTION lxw_chart_axis_set_reverse(axis)
+RETURN CallDll( "chart_axis_set_reverse", axis )
+
+/**
+ * @brief Set the minimum value for a chart axis.
+ *
+ * @param axis A pointer to a chart #lxw_chart_axis object.
+ * @param min  Minimum value for chart axis. Value axes only.
+ *
+ * Set the minimum value for the axis range.
+ *
+ * @code
+ *     chart_axis_set_min(chart->y_axis, -4);
+ *     chart_axis_set_max(chart->y_axis, 21);
+ * @endcode
+ *
+ * @image html chart_max_min.png
+ *
+ * @note This function is applicable to value and date axes only.
+ *       It isn't applicable to the horizontal category axis in the above
+ *       example. For more information see @ref ww_charts_axes.
+ *
+ */
+FUNCTION lxw_chart_axis_set_min(axis, min)
+RETURN CallDll( "chart_axis_set_min", axis, ToDouble(min) )
+
+/**
+ * @brief Set the maximum value for a chart axis.
+ *
+ * @param axis A pointer to a chart #lxw_chart_axis object.
+ * @param max  Maximum value for chart axis. Value axes only.
+ *
+ * Set the maximum value for the axis range.
+ *
+ * @code
+ *     chart_axis_set_min(chart->y_axis, -4);
+ *     chart_axis_set_max(chart->y_axis, 21);
+ * @endcode
+ *
+ * See the above image.
+ *
+ * @note This function is applicable to value and date axes only.
+ *       It isn't applicable to the horizontal category axis in the above
+ *       example. For more information see @ref ww_charts_axes.
+ */
+FUNCTION lxw_chart_axis_set_max(axis, max)
+RETURN CallDll( "chart_axis_set_max", axis, ToDouble(max) )
+
+/**
+ * @brief Set the log base of the axis range.
+ *
+ * @param axis     A pointer to a chart #lxw_chart_axis object.
+ * @param log_base The log base for value axis. Value axes only.
+ *
+ * Set the log base for the axis:
+ *
+ * @code
+ *     chart_axis_set_log_base(chart->y_axis, 10);
+ * @endcode
+ *
+ * @image html chart_log_base.png
+ *
+ * The allowable range of values for the log base in Excel is between 2 and
+ * 1000.
+ *
+ * @note This function is applicable to value and date axes only.
+ *       It isn't applicable to the horizontal category axis in the above
+ *       example. For more information see @ref ww_charts_axes.
+ */
+FUNCTION lxw_chart_axis_set_log_base(axis, log_base)
+RETURN CallDll( "chart_axis_set_log_base", axis, log_base )
+
+/**
+ * @brief Set the title of the chart.
+ *
+ * @param chart Pointer to a lxw_chart instance to be configured.
+ * @param name  The chart title name.
+ *
+ * The `%chart_title_set_name()` function sets the name (title) for the
+ * chart. The name is displayed above the chart.
+ *
+ * @code
+ *     chart_title_set_name(chart, "Year End Results");
+ * @endcode
+ *
+ * @image html chart_title_set_name.png
+ *
+ * The name parameter can also be a formula such as `=Sheet1!$A$1` to point to
+ * a cell in the workbook that contains the name:
+ *
+ * @code
+ *     chart_title_set_name(chart, "=Sheet1!$B1$1");
+ * @endcode
+ *
+ * See also the `chart_title_set_name_range()` function to see how to set the
+ * name formula programmatically.
+ *
+ * The Excel default is to have no chart title.
+ */
+FUNCTION lxw_chart_title_set_name(chart, name)
+RETURN CallDll( "chart_title_set_name", chart, name )
+
+/**
+ * @brief Set a chart title formula using row and column values.
+ *
+ * @param chart     Pointer to a lxw_chart instance to be configured.
+ * @param sheetname The name of the worksheet that contains the cell range.
+ * @param row       The zero indexed row number of the range.
+ * @param col       The zero indexed column number of the range.
+ *
+ * The `%chart_title_set_name_range()` function can be used to set a chart
+ * title range and is an alternative to using `chart_title_set_name()` and a
+ * string formula:
+ *
+ * @code
+ *     chart_title_set_name_range(chart, "Sheet1", 1, 0);
+ * @endcode
+ */
+FUNCTION lxw_chart_title_set_name_range(chart, sheetname, row, col)
+RETURN CallDll( "chart_title_set_name_range", chart, sheetname, row, col )
+
+/**
+ * @brief  Set the font properties for a chart title.
+ *
+ * @param chart Pointer to a lxw_chart instance to be configured.
+ * @param font  A pointer to a chart #lxw_chart_font font struct.
+ *
+ * The `%chart_title_set_name_font()` function is used to set the font of a
+ * chart title:
+ *
+ * @code
+ *     lxw_chart_font font = {.bold = LXW_TRUE, .color = LXW_COLOR_BLUE};
+ *
+ *     chart_title_set_name(chart, "Year End Results");
+ *     chart_title_set_name_font(chart, &font);
+ * @endcode
+ *
+ * @image html chart_title_set_name_font.png
+ *
+ * For more information see @ref chart_fonts.
+ */
+FUNCTION lxw_chart_title_set_name_font(chart, font)
+LOCAL  pFont
+pFont:= lxw_prepare_chart_font(font)
+RETURN CallDll( "chart_title_set_name_font", chart, pFont )
+
+
+/**
+ * @brief Turn off an automatic chart title.
+ *
+ * @param chart  Pointer to a lxw_chart instance to be configured.
+ *
+ * In general in Excel a chart title isn't displayed unless the user
+ * explicitly adds one. However, Excel adds an automatic chart title to charts
+ * with a single series and a user defined series name. The
+ * `chart_title_off()` function allows you to turn off this automatic chart
+ * title:
+ *
+ * @code
+ *     chart_title_off(chart);
+ * @endcode
+ */
+FUNCTION lxw_chart_title_off(chart)
+RETURN CallDll( "chart_title_off", chart )
+
+/**
+ * @brief Set the position of the chart legend.
+ *
+ * @param chart    Pointer to a lxw_chart instance to be configured.
+ * @param position The #lxw_chart_legend_position value for the legend.
+ *
+ * The `%chart_legend_set_position()` function is used to set the chart
+ * legend to one of the #lxw_chart_legend_position values:
+ *
+ *     LXW_CHART_LEGEND_NONE
+ *     LXW_CHART_LEGEND_RIGHT
+ *     LXW_CHART_LEGEND_LEFT
+ *     LXW_CHART_LEGEND_TOP
+ *     LXW_CHART_LEGEND_BOTTOM
+ *     LXW_CHART_LEGEND_OVERLAY_RIGHT
+ *     LXW_CHART_LEGEND_OVERLAY_LEFT
+ *
+ * For example:
+ *
+ * @code
+ *     chart_legend_set_position(chart, LXW_CHART_LEGEND_BOTTOM);
+ * @endcode
+ *
+ * @image html chart_legend_bottom.png
+ *
+ * This function can also be used to turn off a chart legend:
+ *
+ * @code
+ *     chart_legend_set_position(chart, LXW_CHART_LEGEND_NONE);
+ * @endcode
+ *
+ * @image html chart_legend_none.png
+ *
+ */
+FUNCTION lxw_chart_legend_set_position(chart, position)
+RETURN CallDll( "chart_legend_set_position", chart, position )
+
+/**
+ * @brief Set the font properties for a chart legend.
+ *
+ * @param chart Pointer to a lxw_chart instance to be configured.
+ * @param font  A pointer to a chart #lxw_chart_font font struct.
+ *
+ * The `%chart_legend_set_font()` function is used to set the font of a
+ * chart legend:
+ *
+ * @code
+ *     lxw_chart_font font = {.bold = LXW_TRUE, .color = LXW_COLOR_BLUE};
+ *
+ *     chart_legend_set_font(chart, &font);
+ * @endcode
+ *
+ * @image html chart_legend_set_font.png
+ *
+ * For more information see @ref chart_fonts.
+ */
+FUNCTION lxw_chart_legend_set_font(chart, font)
+LOCAL pFont
+pFont:= lxw_prepare_chart_font(font)
+RETURN CallDll( "chart_legend_set_font", chart, pFont )
+
+/**
+ * @brief Remove one or more series from the the legend.
+ *
+ * @param chart         Pointer to a lxw_chart instance to be configured.
+ * @param delete_series An array of zero-indexed values to delete from series.
+ *
+ * @return A #lxw_error.
+ *
+ * The `%chart_legend_delete_series()` function allows you to remove/hide one
+ * or more series in a chart legend (the series will still display on the chart).
+ *
+ * This function takes an array of one or more zero indexed series
+ * numbers. The array should be terminated with -1.
+ *
+ * For example to remove the first and third zero-indexed series from the
+ * legend of a chart with 3 series:
+ *
+ * @code
+ *     int16_t series[] = {0, 2, -1};
+ *
+ *     chart_legend_delete_series(chart, series);
+ * @endcode
+ *
+ * @image html chart_legend_delete.png
+ */
+//FUNCTION lxw_chart_legend_delete_series(lxw_chart *chart, int16_t delete_series[]);
+//RETURN CallDll( "chart_legend_delete_series", chart, delete_series )
+
+/**
+ * @brief Set the line properties for a chartarea.
+ *
+ * @param chart Pointer to a lxw_chart instance to be configured.
+ * @param line  A #lxw_chart_line struct.
+ *
+ * Set the line/border properties of a chartarea. In Excel the chartarea
+ * is the background area behind the chart:
+ *
+ * @code
+ *     lxw_chart_line line = {.none  = LXW_TRUE};
+ *     lxw_chart_fill fill = {.color = LXW_COLOR_RED};
+ *
+ *     chart_chartarea_set_line(chart, &line);
+ *     chart_chartarea_set_fill(chart, &fill);
+ * @endcode
+ *
+ * @image html chart_chartarea.png
+ *
+ * For more information see @ref chart_lines.
+ */
+FUNCTION lxw_chart_chartarea_set_line(chart, line)
+LOCAL pLine
+pLine:= lxw_prepare_chart_line(line)
+RETURN CallDll( "chart_chartarea_set_line", chart, pLine )
+
+/**
+ * @brief Set the fill properties for a chartarea.
+ *
+ * @param chart Pointer to a lxw_chart instance to be configured.
+ * @param fill  A #lxw_chart_fill struct.
+ *
+ * Set the fill properties of a chartarea:
+ *
+ * @code
+ *     chart_chartarea_set_fill(chart, &fill);
+ * @endcode
+ *
+ * See the example and image above.
+ *
+ * For more information see @ref chart_fills.
+ */
+//FUNCTION lxw_chart_chartarea_set_fill(lxw_chart *chart, lxw_chart_fill *fill);
+//RETURN CallDll( "chart_chartarea_set_fill", chart, fill )
+
+/**
+ * @brief Set the pattern properties for a chartarea.
+ *
+ * @param chart   Pointer to a lxw_chart instance to be configured.
+ * @param pattern A #lxw_chart_pattern struct.
+ *
+ * Set the pattern properties of a chartarea:
+ *
+ * @code
+ *     chart_chartarea_set_pattern(series1, &pattern);
+ * @endcode
+ *
+ * For more information see #lxw_chart_pattern_type and @ref chart_patterns.
+ */
+FUNCTION lxw_chart_chartarea_set_pattern(chart, pattern)
+LOCAL pPattern
+pPattern:= lxw_prepare_chart_pattern(pattern)
+RETURN CallDll( "chart_chartarea_set_pattern", chart, pPattern )
+
+/**
+ * @brief Set the line properties for a plotarea.
+ *
+ * @param chart Pointer to a lxw_chart instance to be configured.
+ * @param line  A #lxw_chart_line struct.
+ *
+ * Set the line/border properties of a plotarea. In Excel the plotarea is
+ * the area between the axes on which the chart series are plotted:
+ *
+ * @code
+ *     lxw_chart_line line = {.color     = LXW_COLOR_RED,
+ *                            .width     = 2,
+ *                            .dash_type = LXW_CHART_LINE_DASH_DASH};
+ *     lxw_chart_fill fill = {.color     = 0xFFFFC2};
+ *
+ *     chart_plotarea_set_line(chart, &line);
+ *     chart_plotarea_set_fill(chart, &fill);
+ *
+ * @endcode
+ *
+ * @image html chart_plotarea.png
+ *
+ * For more information see @ref chart_lines.
+ */
+FUNCTION lxw_chart_plotarea_set_line(chart, line)
+LOCAL pLine
+pLine:= lxw_prepare_chart_line(line)
+RETURN CallDll( "chart_plotarea_set_line", chart, pLine )
+
+/**
+ * @brief Set the fill properties for a plotarea.
+ *
+ * @param chart Pointer to a lxw_chart instance to be configured.
+ * @param fill  A #lxw_chart_fill struct.
+ *
+ * Set the fill properties of a plotarea:
+ *
+ * @code
+ *     chart_plotarea_set_fill(chart, &fill);
+ * @endcode
+ *
+ * See the example and image above.
+ *
+ * For more information see @ref chart_fills.
+ */
+//FUNCTION lxw_chart_plotarea_set_fill(lxw_chart *chart, lxw_chart_fill *fill);
+//RETURN CallDll( "chart_plotarea_set_fill", chart, fill )
+
+/**
+ * @brief Set the pattern properties for a plotarea.
+ *
+ * @param chart   Pointer to a lxw_chart instance to be configured.
+ * @param pattern A #lxw_chart_pattern struct.
+ *
+ * Set the pattern properties of a plotarea:
+ *
+ * @code
+ *     chart_plotarea_set_pattern(series1, &pattern);
+ * @endcode
+ *
+ * For more information see #lxw_chart_pattern_type and @ref chart_patterns.
+ */
+FUNCTION lxw_chart_plotarea_set_pattern(chart, pattern)
+LOCAL pPattern
+pPattern:= lxw_prepare_chart_pattern(pattern)
+RETURN CallDll( "chart_plotarea_set_pattern", chart, pPattern )
+
+/**
+ * @brief Set the chart style type.
+ *
+ * @param chart    Pointer to a lxw_chart instance to be configured.
+ * @param style_id An index representing the chart style, 1 - 48.
+ *
+ * The `%chart_set_style()` function is used to set the style of the chart to
+ * one of the 48 built-in styles available on the "Design" tab in Excel 2007:
+ *
+ * @code
+ *     chart_set_style(chart, 37)
+ * @endcode
+ *
+ * @image html chart_style.png
+ *
+ * The style index number is counted from 1 on the top left in the Excel
+ * dialog. The default style is 2.
+ *
+ * **Note:**
+ *
+ * In Excel 2013 the Styles section of the "Design" tab in Excel shows what
+ * were referred to as "Layouts" in previous versions of Excel. These layouts
+ * are not defined in the file format. They are a collection of modifications
+ * to the base chart type. They can not be defined by the `chart_set_style()``
+ * function.
+ *
+ *
+ */
+FUNCTION lxw_chart_set_style(chart, style_id)
+RETURN CallDll( "chart_set_style", chart, style_id )
+
+FUNCTION lxw_chart_set_rotation(chart, rotation)
+RETURN CallDll( "chart_set_rotation", chart, rotation )
+
+FUNCTION lxw_chart_set_hole_size(chart, size)
+RETURN CallDll( "chart_set_hole_size", chart, size )
+
+//FUNCTION lxw_chart_add_data_cache(range, data, rows, cols, col)
+//RETURN CallDll( "lxw_chart_add_data_cache", range, data, rows, cols, col )
+
+
+/** @brief Struct to represent a date and time in Excel.
+ *
+ * Struct to represent a date and time in Excel. See @ref working_with_dates.
+ */
+    /** Year     : 1900 - 9999 */
+    /** Month    : 1 - 12 */
+    /** Day      : 1 - 31 */
+    /** Hour     : 0 - 23 */
+    /** Minute   : 0 - 59 */
+    /** Seconds  : 0 - 59.999 */
+pragma pack(8) 
+typedef struct lxw_datetime {;
+    int year;
+    int month;
+    int day;
+    int hour;
+    int min;
+    DOUBLE sec;
+} lxw_datetime;
+
+pragma pack(8) 
+typedef struct lxw_array_int_10 {;
+    int element1;
+    int element2;
+    int element3;
+    int element4;
+    int element5;
+    int element6;
+    int element7;
+    int element8;
+    int element9;
+    int element10;
+} lxw_array_int_10;
+
+/**
+ * @brief Workbook options.
+ *
+ * Optional parameters when creating a new Workbook object via
+ * workbook_new_opt().
+ *
+ * The following properties are supported:
+ *
+ * - `constant_memory`: Reduces the amount of data stored in memory so that
+ *   large files can be written efficiently.
+ *
+ *   @note In this mode a row of data is written and then discarded when a
+ *   cell in a new row is added via one of the `worksheet_write_*()`
+ *   functions. Therefore, once this option is active, data should be written in
+ *   sequential row order. For this reason the `worksheet_merge_range()`
+ *   doesn't work in this mode. See also @ref ww_mem_constant.
+ *
+ * - `tmpdir`: libxlsxwriter stores workbook data in temporary files prior
+ *   to assembling the final XLSX file. The temporary files are created in the
+ *   system's temp directory. If the default temporary directory isn't
+ *   accessible to your application, or doesn't contain enough space, you can
+ *   specify an alternative location using the `tempdir` option.
+ */
+pragma pack(8) 
+typedef struct lxw_workbook_options {;
+    UCHAR constant_memory;
+    LPCSTR tmpdir;
+} lxw_workbook_options;
+
+/**
+ * Workbook document properties.
+ */
+    /** The title of the Excel Document. */
+    /** The subject of the Excel Document. */
+    /** The author of the Excel Document. */
+    /** The manager field of the Excel Document. */
+    /** The company field of the Excel Document. */
+    /** The category of the Excel Document. */
+    /** The keywords of the Excel Document. */
+    /** The comment field of the Excel Document. */
+    /** The status of the Excel Document. */
+    /** The hyperlink base url of the Excel Document. */
+pragma pack(8) 
+typedef struct lxw_doc_properties {;
+    LPCSTR title;
+    LPCSTR subject;
+    LPCSTR author;
+    LPCSTR manager;
+    LPCSTR company;
+    LPCSTR category;
+    LPCSTR keywords;
+    LPCSTR comments;
+    LPCSTR status;
+    LPCSTR hyperlink_base;
+    int created;
+} lxw_doc_properties;
+
+
+/**
+ * @brief Struct to represent a chart font.
+ *
+ * See @ref chart_fonts.
+ */
+/*
+typedef struct lxw_chart_font {;
+
+    // The chart font name, such as "Arial" or "Calibri". 
+    char *name;
+
+    // The chart font size. The default is 11. 
+    uint16_t size;
+
+    // The chart font bold property. Set to 0 or 1. 
+    uint8_t bold;
+
+    // The chart font italic property. Set to 0 or 1. 
+    uint8_t italic;
+
+    // The chart font underline property. Set to 0 or 1. 
+    uint8_t underline;
+
+    // The chart font rotation property. Range: -90 to 90. 
+    int32_t rotation;
+
+    // The chart font color. See @ref working_with_colors. 
+    lxw_color_t color;
+
+    // Members for internal use only. 
+    uint8_t pitch_family;
+    uint8_t charset;
+    int8_t baseline;
+    uint8_t has_color;
+
+} lxw_chart_font;
+*/
+
+pragma pack(8) 
+typedef struct lxw_chart_font {;
+    LPCSTR name;
+    USHORT size;
+    UCHAR bold;
+    UCHAR italic;
+    UCHAR underline;
+    INT rotation;
+    INT color;
+    UCHAR pitch_family;
+    UCHAR charset;
+    char baseline;
+    UCHAR has_color;
+} lxw_chart_font;
+/*
+typedef signed char int8_t;
+typedef unsigned char   uint8_t;
+typedef short  int16_t;
+typedef unsigned short  uint16_t;
+typedef int  int32_t;
+typedef unsigned   uint32_t;
+typedef long long  int64_t;
+typedef unsigned long long   uint64_t;
+*/
+
+/**
+ * @brief Struct to represent a chart pattern.
+ *
+ * See @ref chart_patterns.
+ */
+/*
+typedef struct lxw_chart_pattern {
+
+    // The pattern foreground color. See @ref working_with_colors. 
+    lxw_color_t fg_color;
+
+    // The pattern background color. See @ref working_with_colors. 
+    lxw_color_t bg_color;
+
+    // The pattern type. See #lxw_chart_pattern_type. 
+    uint8_t type;
+
+    // Members for internal use only. 
+    uint8_t has_fg_color;
+    uint8_t has_bg_color;
+
+} lxw_chart_pattern;
+*/
+pragma pack(8) 
+typedef struct lxw_chart_pattern {;
+    INT fg_color;
+    INT bg_color;
+    UCHAR type;
+    UCHAR has_fg_color;
+    UCHAR has_bg_color;
+} lxw_chart_pattern;
+
+/**
+ * @brief Struct to represent a chart line.
+ *
+ * See @ref chart_lines.
+ */
+/*
+typedef struct lxw_chart_line {
+
+    // The chart font color. See @ref working_with_colors. 
+    lxw_color_t color;
+
+    // Turn off/hide line. Set to 0 or 1.
+    uint8_t none;
+
+    // Width of the line in increments of 0.25. Default is 2.25. 
+    float width;
+
+    // The line dash type. See #lxw_chart_line_dash_type. 
+    uint8_t dash_type;
+
+    // Transparency for lines isn't generally useful. Undocumented for now. 
+    uint8_t transparency;
+
+    // Members for internal use only. 
+    uint8_t has_color;
+
+} lxw_chart_line;
+*/
+typedef struct lxw_chart_line {;
+    INT color;
+    UCHAR none;
+    DOUBLE width;
+    UCHAR dash_type;
+    UCHAR transparency;
+    UCHAR has_color;
+} lxw_chart_line;
+
+
+FUNCTION lxw_prepare_chart_font(font)
+LOCAL oFont
+oFont := hb_CStructure( "LXW_CHART_FONT" ):Buffer()
+IF HB_HHASKEY( font, "name" )
+   oFont:name        := font[ "name"         ]
+ENDIF
+IF HB_HHASKEY( font, "size" )
+   oFont:size        := font[ "size"         ]
+ENDIF
+IF HB_HHASKEY( font, "bold" )
+   oFont:bold        := font[ "bold"         ]
+ENDIF
+IF HB_HHASKEY( font, "italic" )
+   oFont:italic      := font[ "italic"       ]
+ENDIF
+IF HB_HHASKEY( font, "underline" )
+   oFont:underline   := font[ "underline"    ]
+ENDIF
+IF HB_HHASKEY( font, "rotation" )
+   oFont:rotation    := font[ "rotation"     ]
+ENDIF
+IF HB_HHASKEY( font, "color" )
+   oFont:color       := font[ "color"        ]
+ENDIF
+IF HB_HHASKEY( font, "pitch_family" )
+   oFont:pitch_family:= font[ "pitch_family" ]
+ENDIF
+IF HB_HHASKEY( font, "charset" )
+   oFont:charset     := font[ "charset"      ]
+ENDIF
+IF HB_HHASKEY( font, "baseline" )
+   oFont:baseline    := font[ "baseline"     ]
+ENDIF
+IF HB_HHASKEY( font, "has_color" )
+   oFont:has_color   := font[ "has_color"    ]
+ENDIF
+RETURN oFont:GetPointer()
+
+
+FUNCTION lxw_prepare_chart_pattern(pattern)
+LOCAL oPattern
+oPattern := hb_CStructure( "LXW_CHART_PATTERN" ):Buffer()
+IF HB_HHASKEY( pattern, "fg_color" )
+   oPattern:fg_color:= pattern[ "fg_color" ]
+ENDIF
+IF HB_HHASKEY( pattern, "bg_color" )
+   oPattern:bg_color:= pattern[ "bg_color" ]
+ENDIF
+IF HB_HHASKEY( pattern, "type" )
+   oPattern:type:= pattern[ "type" ]
+ENDIF
+IF HB_HHASKEY( pattern, "has_fg_color" )
+   oPattern:has_fg_color:= pattern[ "has_fg_color" ]
+ENDIF
+IF HB_HHASKEY( pattern, "has_bg_color" )
+   oPattern:has_bg_color:= pattern[ "has_bg_color" ]
+ENDIF
+RETURN oPattern:GetPointer()
+
+
+FUNCTION lxw_prepare_chart_line(line)
+LOCAL oLine
+oLine := hb_CStructure( "LXW_CHART_LINE" ):Buffer()
+IF HB_HHASKEY( line, "color" )
+   oLine:color:= line[ "color" ]
+ENDIF
+IF HB_HHASKEY( line, "none" )
+   oLine:none:= line[ "none" ]
+ENDIF
+IF HB_HHASKEY( line, "dash_type" )
+   oLine:dash_type:= line[ "dash_type" ]
+ENDIF
+IF HB_HHASKEY( line, "transparency" )
+   oLine:transparency:= line[ "transparency" ]
+ENDIF
+IF HB_HHASKEY( line, "has_color" )
+   oLine:has_color:= line[ "has_color" ]
+ENDIF
+RETURN oLine:GetPointer()
+
+
+#pragma BEGINDUMP
+
+ #include "hbapi.h"
+ #include "xlsxwriter.h"
+
+HB_FUNC( LXW_GET_X_AXYS )
+{
+   lxw_chart *chart = (lxw_chart*) hb_parni(1);
+   return hb_retptr( chart->x_axis );
+}
+
+HB_FUNC( LXW_GET_Y_AXYS )
+{
+   lxw_chart *chart = (lxw_chart*) hb_parni(1);
+   return hb_retptr( chart->y_axis );
+}
+
+#pragma ENDDUMP

@@ -13,6 +13,11 @@
  * Copyright 2014-2017, John McNamara, jmcnamara@cpan.org. See LICENSE.txt.
  */
 
+    /** False value. */
+#define LXW_FALSE  0
+    /** True value. */
+#define LXW_TRUE   1
+
 /** Alignment values for format_set_align(). */
         /** No alignment. Cell will use Excel's default for the data type */
 #define LXW_ALIGN_NONE  0
@@ -247,3 +252,246 @@
 #xtranslate LXW_CELL([<cell>]) => lxw_name_to_row(<cell>), lxw_name_to_col(<cell>)
 #xtranslate LXW_COLS([<cols>]) => lxw_name_to_col(<cols>), lxw_name_to_col_2(<cols>)
 #xtranslate LXW_RANGE([<range>]) => lxw_name_to_row(<range>), lxw_name_to_col(<range>), lxw_name_to_row_2(<range>), lxw_name_to_col_2(<range>)
+
+
+/**
+ * @brief Available chart types.
+ */
+    /** None. */
+#define LXW_CHART_NONE  0
+
+    /** Area chart. */
+#define LXW_CHART_AREA  1
+
+    /** Area chart - stacked. */
+#define LXW_CHART_AREA_STACKED  2
+
+    /** Area chart - percentage stacked. */
+#define LXW_CHART_AREA_STACKED_PERCENT  3
+
+    /** Bar chart. */
+#define LXW_CHART_BAR  4
+
+    /** Bar chart - stacked. */
+#define LXW_CHART_BAR_STACKED  5
+
+    /** Bar chart - percentage stacked. */
+#define LXW_CHART_BAR_STACKED_PERCENT  6
+
+    /** Column chart. */
+#define LXW_CHART_COLUMN  7
+
+    /** Column chart - stacked. */
+#define LXW_CHART_COLUMN_STACKED  8
+
+    /** Column chart - percentage stacked. */
+#define LXW_CHART_COLUMN_STACKED_PERCENT  9
+
+    /** Doughnut chart. */
+#define LXW_CHART_DOUGHNUT  10
+
+    /** Line chart. */
+#define LXW_CHART_LINE  11
+
+    /** Pie chart. */
+#define LXW_CHART_PIE  12
+
+    /** Scatter chart. */
+#define LXW_CHART_SCATTER  13
+
+    /** Scatter chart - straight. */
+#define LXW_CHART_SCATTER_STRAIGHT  14
+
+    /** Scatter chart - straight with markers. */
+#define LXW_CHART_SCATTER_STRAIGHT_WITH_MARKERS  15
+
+    /** Scatter chart - smooth. */
+#define LXW_CHART_SCATTER_SMOOTH  16
+
+    /** Scatter chart - smooth with markers. */
+#define LXW_CHART_SCATTER_SMOOTH_WITH_MARKERS  17
+
+    /** Radar chart. */
+#define LXW_CHART_RADAR  18
+
+    /** Radar chart - with markers. */
+#define LXW_CHART_RADAR_WITH_MARKERS  19
+
+    /** Radar chart - filled. */
+#define LXW_CHART_RADAR_FILLED  20
+
+
+/**
+ * @brief Chart legend positions.
+ */
+    /** No chart legend. */
+#define LXW_CHART_LEGEND_NONE             0
+
+    /** Chart legend positioned at right side. */
+#define LXW_CHART_LEGEND_RIGHT            1
+
+    /** Chart legend positioned at left side. */
+#define XW_CHART_LEGEND_LEFT              2
+
+    /** Chart legend positioned at top. */
+#define LXW_CHART_LEGEND_TOP              3
+
+    /** Chart legend positioned at bottom. */
+#define LXW_CHART_LEGEND_BOTTOM           4
+
+    /** Chart legend overlaid at right side. */
+#define LXW_CHART_LEGEND_OVERLAY_RIGHT    5
+
+    /** Chart legend overlaid at left side. */
+#define LXW_CHART_LEGEND_OVERLAY_LEFT     6
+
+
+/**
+ * @brief Chart pattern types.
+ */
+    /** None pattern. */
+#define LXW_CHART_PATTERN_NONE                                   0
+
+    /** 5 Percent pattern. */
+#define LXW_CHART_PATTERN_PERCENT_5                              1
+
+    /** 10 Percent pattern. */
+#define LXW_CHART_PATTERN_PERCENT_10                             2
+
+    /** 20 Percent pattern. */
+#define LXW_CHART_PATTERN_PERCENT_20                             3
+
+    /** 25 Percent pattern. */
+#define LXW_CHART_PATTERN_PERCENT_25                             4
+
+    /** 30 Percent pattern. */
+#define LXW_CHART_PATTERN_PERCENT_30                             5
+
+    /** 40 Percent pattern. */
+#define LXW_CHART_PATTERN_PERCENT_40                             6
+
+    /** 50 Percent pattern. */
+#define LXW_CHART_PATTERN_PERCENT_50                             7
+
+    /** 60 Percent pattern. */
+#define LXW_CHART_PATTERN_PERCENT_60                             8
+
+    /** 70 Percent pattern. */
+#define LXW_CHART_PATTERN_PERCENT_70                             9
+
+    /** 75 Percent pattern. */
+#define LXW_CHART_PATTERN_PERCENT_75                            10
+
+    /** 80 Percent pattern. */
+#define LXW_CHART_PATTERN_PERCENT_80                            11
+
+    /** 90 Percent pattern. */
+#define LXW_CHART_PATTERN_PERCENT_90                            12
+
+    /** Light downward diagonal pattern. */
+#define LXW_CHART_PATTERN_LIGHT_DOWNWARD_DIAGONAL               13
+
+    /** Light upward diagonal pattern. */
+#define LXW_CHART_PATTERN_LIGHT_UPWARD_DIAGONAL                 14
+
+    /** Dark downward diagonal pattern. */
+#define LXW_CHART_PATTERN_DARK_DOWNWARD_DIAGONAL                15
+
+    /** Dark upward diagonal pattern. */
+#define LXW_CHART_PATTERN_DARK_UPWARD_DIAGONAL                  16
+
+    /** Wide downward diagonal pattern. */
+#define LXW_CHART_PATTERN_WIDE_DOWNWARD_DIAGONAL                17
+
+    /** Wide upward diagonal pattern. */
+#define LXW_CHART_PATTERN_WIDE_UPWARD_DIAGONAL                  18
+
+    /** Light vertical pattern. */
+#define LXW_CHART_PATTERN_LIGHT_VERTICAL                        19
+
+    /** Light horizontal pattern. */
+#define LXW_CHART_PATTERN_LIGHT_HORIZONTAL                      20
+
+    /** Narrow vertical pattern. */
+#define LXW_CHART_PATTERN_NARROW_VERTICAL                       21
+
+    /** Narrow horizontal pattern. */
+#define LXW_CHART_PATTERN_NARROW_HORIZONTAL                     22
+
+    /** Dark vertical pattern. */
+#define LXW_CHART_PATTERN_DARK_VERTICAL                         23
+
+    /** Dark horizontal pattern. */
+#define LXW_CHART_PATTERN_DARK_HORIZONTAL                       24
+
+    /** Dashed downward diagonal pattern. */
+#define LXW_CHART_PATTERN_DASHED_DOWNWARD_DIAGONAL              25
+
+    /** Dashed upward diagonal pattern. */
+#define LXW_CHART_PATTERN_DASHED_UPWARD_DIAGONAL                26
+
+    /** Dashed horizontal pattern. */
+#define LXW_CHART_PATTERN_DASHED_HORIZONTAL                     27
+
+    /** Dashed vertical pattern. */
+#define LXW_CHART_PATTERN_DASHED_VERTICAL                       28
+
+    /** Small confetti pattern. */
+#define LXW_CHART_PATTERN_SMALL_CONFETTI                        29
+
+    /** Large confetti pattern. */
+#define LXW_CHART_PATTERN_LARGE_CONFETTI                        30
+
+    /** Zigzag pattern. */
+#define LXW_CHART_PATTERN_ZIGZAG                                31
+
+    /** Wave pattern. */
+#define LXW_CHART_PATTERN_WAVE                                  32
+
+    /** Diagonal brick pattern. */
+#define LXW_CHART_PATTERN_DIAGONAL_BRICK                        33
+
+    /** Horizontal brick pattern. */
+#define LXW_CHART_PATTERN_HORIZONTAL_BRICK                      34
+
+    /** Weave pattern. */
+#define LXW_CHART_PATTERN_WEAVE                                 35
+
+    /** Plaid pattern. */
+#define LXW_CHART_PATTERN_PLAID                                 36
+
+    /** Divot pattern. */
+#define LXW_CHART_PATTERN_DIVOT                                 37
+
+    /** Dotted grid pattern. */
+#define LXW_CHART_PATTERN_DOTTED_GRID                           38
+
+    /** Dotted diamond pattern. */
+#define LXW_CHART_PATTERN_DOTTED_DIAMOND                        39
+
+    /** Shingle pattern. */
+#define LXW_CHART_PATTERN_SHINGLE                               40
+
+    /** Trellis pattern. */
+#define LXW_CHART_PATTERN_TRELLIS                               41
+
+    /** Sphere pattern. */
+#define LXW_CHART_PATTERN_SPHERE                                42
+
+    /** Small grid pattern. */
+#define LXW_CHART_PATTERN_SMALL_GRID                            43
+
+    /** Large grid pattern. */
+#define LXW_CHART_PATTERN_LARGE_GRID                            44
+
+    /** Small check pattern. */
+#define LXW_CHART_PATTERN_SMALL_CHECK                           45
+
+    /** Large check pattern. */
+#define LXW_CHART_PATTERN_LARGE_CHECK                           46
+
+    /** Outlined diamond pattern. */
+#define LXW_CHART_PATTERN_OUTLINED_DIAMOND                      47
+
+    /** Solid diamond pattern. */
+#define LXW_CHART_PATTERN_SOLID_DIAMOND                         48
