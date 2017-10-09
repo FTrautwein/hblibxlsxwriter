@@ -1,4 +1,5 @@
 -hblib
+xhb.hbc
 hblibxlsxwriter.prg
 -w2 -es2 -ic:\source\libxlsxwriter-master\include
  
