@@ -25,12 +25,10 @@ LOCAL workbook, worksheet, chart, series, bold
     /* Write some data for the chart. */
     write_worksheet_data(worksheet, bold)
 
-
     /*
      * Create a area chart.
      */
     chart = lxw_workbook_add_chart(workbook, LXW_CHART_AREA)
-    tracelog( valtoprg(chart) )
 
     /* Add the first series to the chart. */
     series = lxw_chart_add_series(chart, "=Sheet1!$A$2:$A$7", "=Sheet1!$B$2:$B$7")
@@ -84,7 +82,6 @@ LOCAL workbook, worksheet, chart, series, bold
 
     /* Insert the chart into the worksheet. */
     lxw_worksheet_insert_chart(worksheet, LXW_CELL("E18"), chart)
-
 
     /*
      * Create a percent stacked area chart.

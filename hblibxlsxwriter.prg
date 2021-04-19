@@ -1,21 +1,19 @@
 // -----------------------------------------------------------------------------
 // hblibxlsxwriter
 //
-// libxlsxwriter wrappers for Harbour
+// libxlsxwriter (version 1.01) wrappers for Harbour
 //
-// Copyright 2017 Fausto Di Creddo Trautwein <ftwein@gmail.com>
+// Copyright 2017-2021 Fausto Di Creddo Trautwein <ftwein@gmail.com>
 //
 // -----------------------------------------------------------------------------
 
 /*
  * libxlsxwriter
  *
- * Copyright 2014-2017, John McNamara, jmcnamara@cpan.org. See LICENSE.txt.
+ * Copyright 2014-2021 John McNamara, jmcnamara@cpan.org. See LICENSE.txt.
  */
 
 #include "hbdyn.ch" 
-#include "CStruct.ch" // required for "typedef struct"
-#include "Wintypes.ch" 
 
 STATIC nHDll
 
@@ -23,10 +21,12 @@ FUNCTION lxw_init()
 nHDll:= hb_libLoad( "libxlsxwriter.dll" )
 RETURN Nil
 
+FUNCTION lxw_end() 
+hb_libFree( nHDll )
+RETURN Nil
+
 FUNCTION CallDll( cProc, ... )         
-LOCAL xRet
-xRet:= hb_DynCall( { cProc, nHDll, HB_DYN_CALLCONV_SYSCALL }, ... )
-RETURN xRet
+RETURN hb_DynCall( { cProc, nHDll, HB_DYN_CALLCONV_SYSCALL }, ... )
 
 FUNCTION ToDouble(n)
 RETURN n+0.01-0.01
@@ -88,6 +88,12 @@ RETURN n+0.01-0.01
 FUNCTION lxw_workbook_new( filename )
 RETURN CallDll( "workbook_new", filename )
 
+FUNCTION lxw_version()
+RETURN CallDll( "lxw_version" )
+
+FUNCTION lxw_version_id()
+RETURN CallDll( "lxw_version_id" )
+
 /**
  * @brief Create a new workbook object, and set the workbook options.
  *
@@ -100,43 +106,48 @@ RETURN CallDll( "workbook_new", filename )
  * additional options to be set.
  *
  * @code
- *    lxw_workbook_options options = {.constant_memory = 1,
- *                                    .tmpdir = "C:\\Temp"};
+ *    lxw_workbook_options options = {.constant_memory = LXW_TRUE,
+ *                                    .tmpdir = "C:\\Temp",
+ *                                    .use_zip64 = LXW_FALSE};
  *
- *    lxw_workbook  *workbook  = workbook_new_opt("filename.xlsx", &options)
+ *    lxw_workbook  *workbook  = workbook_new_opt("filename.xlsx", &options);
  * @endcode
  *
  * The options that can be set via #lxw_workbook_options are:
  *
- * - `constant_memory`: Reduces the amount of data stored in memory so that
- *   large files can be written efficiently.
+ * - `constant_memory`: This option reduces the amount of data stored in
+ *   memory so that large files can be written efficiently. This option is off
+ *   by default. See the note below for limitations when this mode is on.
  *
- *   @note In this mode a row of data is written and then discarded when a
- *   cell in a new row is added via one of the `worksheet_write_*()`
- *   functions. Therefore, once this option is active, data should be written in
- *   sequential row order. For this reason the `worksheet_merge_range()`
- *   doesn't work in this mode. See also @ref ww_mem_constant.
- *
- * - `tmpdir`: libxlsxwriter stores workbook data in temporary files prior
- *   to assembling the final XLSX file. The temporary files are created in the
+ * - `tmpdir`: libxlsxwriter stores workbook data in temporary files prior to
+ *   assembling the final XLSX file. The temporary files are created in the
  *   system's temp directory. If the default temporary directory isn't
  *   accessible to your application, or doesn't contain enough space, you can
- *   specify an alternative location using the `tempdir` option.*
+ *   specify an alternative location using the `tmpdir` option.
  *
- * See @ref working_with_memory for more details.
+ * - `use_zip64`: Make the zip library use ZIP64 extensions when writing very
+ *   large xlsx files to allow the zip container, or individual XML files
+ *   within it, to be greater than 4 GB. See [ZIP64 on Wikipedia][zip64_wiki]
+ *   for more information. This option is off by default.
  *
+ *   [zip64_wiki]: https://en.wikipedia.org/wiki/Zip_(file_format)#ZIP64
+ *
+ * @note In `constant_memory` mode each row of in-memory data is written to
+ * disk and then freed when a new row is started via one of the
+ * `worksheet_write_*()` functions. Therefore, once this option is active data
+ * should be written in sequential row by row order. For this reason
+ * `worksheet_merge_range()` and some other row based functionality doesn't
+ * work in this mode. See @ref ww_mem_constant for more details.
+ *
+ * @note Also, in `constant_memory` mode the library uses temp file storage
+ * for worksheet data. This can lead to an issue on OSes that map the `/tmp`
+ * directory into memory since it is possible to consume the "system" memory
+ * even though the "process" memory remains constant. In these cases you
+ * should use an alternative temp file location by using the `tmpdir` option
+ * shown above. See @ref ww_mem_temp for more details.
  */
 FUNCTION lxw_workbook_new_opt(filename, options)
-LOCAL oOptions , pOptions
-oOptions := hb_CStructure( "lxw_workbook_options" ):Buffer()
-IF HB_HHASKEY( options, "constant_memory" )
-   oOptions:constant_memory:= options[ "constant_memory" ]
-ENDIF   
-IF HB_HHASKEY( options, "tmpdir" )
-   oOptions:tmpdir:= options[ "tmpdir" ]
-ENDIF
-pOptions:= oOptions:GetPointer()
-RETURN CallDll( "workbook_new_opt", filename, pOptions )
+RETURN CallDll( "workbook_new_opt", filename, lxw_prepare_workbook_option( options ) )
 
 /* Deprecated function name for backwards compatibility. */
 FUNCTION lxw_new_workbook(filename)
@@ -144,16 +155,7 @@ RETURN CallDll( "new_workbook", filename )
 
 /* Deprecated function name for backwards compatibility. */
 FUNCTION lxw_new_workbook_opt(filename, options)
-LOCAL oOptions , pOptions
-oOptions := hb_CStructure( "lxw_workbook_options" ):Buffer()
-IF HB_HHASKEY( options, "constant_memory" )
-   oOptions:constant_memory:= options[ "constant_memory" ]
-ENDIF   
-IF HB_HHASKEY( options, "tmpdir" )
-   oOptions:tmpdir:= options[ "tmpdir" ]
-ENDIF
-pOptions:= oOptions:GetPointer()
-RETURN CallDll( "new_workbook_opt", filename, pOptions )
+RETURN lxw_workbook_new_opt(filename, options)
 
 /**
  * @brief Add a new worksheet to a workbook.
@@ -163,7 +165,7 @@ RETURN CallDll( "new_workbook_opt", filename, pOptions )
  *
  * @return A lxw_worksheet object.
  *
- * The `%workbook_add_worksheet()` function adds a new worksheet to a workbook:
+ * The `%workbook_add_worksheet()` function adds a new worksheet to a workbook.
  *
  * At least one worksheet should be added to a new workbook: The @ref
  * worksheet.h "Worksheet" object is used to write data and configure a
@@ -173,23 +175,29 @@ RETURN CallDll( "new_workbook_opt", filename, pOptions )
  * Excel convention will be followed, i.e. Sheet1, Sheet2, etc.:
  *
  * @code
- *     worksheet = workbook_add_worksheet(workbook, NULL  )     // Sheet1
- *     worksheet = workbook_add_worksheet(workbook, "Foglio2")  // Foglio2
- *     worksheet = workbook_add_worksheet(workbook, "Data")     // Data
- *     worksheet = workbook_add_worksheet(workbook, NULL  )     // Sheet4
+ *     worksheet = workbook_add_worksheet(workbook, NULL  );     // Sheet1
+ *     worksheet = workbook_add_worksheet(workbook, "Foglio2");  // Foglio2
+ *     worksheet = workbook_add_worksheet(workbook, "Data");     // Data
+ *     worksheet = workbook_add_worksheet(workbook, NULL  );     // Sheet4
  *
  * @endcode
  *
  * @image html workbook02.png
  *
- * The worksheet name must be a valid Excel worksheet name, i.e. it must be
- * less than 32 character and it cannot contain any of the characters:
+ * The worksheet name must be a valid Excel worksheet name, i.e:
  *
- *     / \ [ ] : * ?
+ * - The name is less than or equal to 31 UTF-8 characters.
+ * - The name doesn't contain any of the characters: ` [ ] : * ? / \ `
+ * - The name doesn't start or end with an apostrophe.
+ * - The name isn't already in use. (Case insensitive).
  *
- * In addition, you cannot use the same, case insensitive, `sheetname` for more
- * than one worksheet.
+ * If any of these errors are encountered the function will return NULL.
+ * You can check for valid name using the `workbook_validate_sheet_name()`
+ * function.
  *
+ * @note You should also avoid using the worksheet name "History" (case
+ * insensitive) which is reserved in English language versions of
+ * Excel. Non-English versions may have restrictions on the equivalent word.
  */
 FUNCTION lxw_workbook_add_worksheet( workbook, sheetname)
 RETURN CallDll( "workbook_add_worksheet", workbook, sheetname )
@@ -207,14 +215,14 @@ RETURN CallDll( "workbook_add_worksheet", workbook, sheetname )
  *
  * @code
  *    // Create the Format.
- *    lxw_format *format = workbook_add_format(workbook)
+ *    lxw_format *format = workbook_add_format(workbook);
  *
  *    // Set some of the format properties.
- *    format_set_bold(format)
- *    format_set_font_color(format, LXW_COLOR_RED)
+ *    format_set_bold(format);
+ *    format_set_font_color(format, LXW_COLOR_RED);
  *
  *    // Use the format to change the text format in a cell.
- *    worksheet_write_string(worksheet, 0, 0, "Hello", format)
+ *    worksheet_write_string(worksheet, 0, 0, "Hello", format);
  * @endcode
  *
  * See @ref format.h "the Format object" and @ref working_with_formats
@@ -237,15 +245,15 @@ RETURN CallDll( "workbook_add_format", workbook )
  *
  * @code
  *     // Create a chart object.
- *     lxw_chart *chart = workbook_add_chart(workbook, LXW_CHART_COLUMN)
+ *     lxw_chart *chart = workbook_add_chart(workbook, LXW_CHART_COLUMN);
  *
  *     // Add data series to the chart.
- *     chart_add_series(chart, NULL, "Sheet1!$A$1:$A$5")
- *     chart_add_series(chart, NULL, "Sheet1!$B$1:$B$5")
- *     chart_add_series(chart, NULL, "Sheet1!$C$1:$C$5")
+ *     chart_add_series(chart, NULL, "Sheet1!$A$1:$A$5");
+ *     chart_add_series(chart, NULL, "Sheet1!$B$1:$B$5");
+ *     chart_add_series(chart, NULL, "Sheet1!$C$1:$C$5");
  *
  *     // Insert the chart into the worksheet
- *     worksheet_insert_chart(worksheet, CELL("B7"), chart)
+ *     worksheet_insert_chart(worksheet, CELL("B7"), chart);
  * @endcode
  *
  * The available chart types are defined in #lxw_chart_type. The types of
@@ -264,6 +272,8 @@ RETURN CallDll( "workbook_add_format", workbook )
  * | #LXW_CHART_COLUMN_STACKED_PERCENT        | Column chart - percentage stacked.     |
  * | #LXW_CHART_DOUGHNUT                      | Doughnut chart.                        |
  * | #LXW_CHART_LINE                          | Line chart.                            |
+ * | #LXW_CHART_LINE_STACKED                  | Line chart - stacked.                  |
+ * | #LXW_CHART_LINE_STACKED_PERCENT          | Line chart - percentage stacked.       |
  * | #LXW_CHART_PIE                           | Pie chart.                             |
  * | #LXW_CHART_SCATTER                       | Scatter chart.                         |
  * | #LXW_CHART_SCATTER_STRAIGHT              | Scatter chart - straight.              |
@@ -293,15 +303,15 @@ RETURN CallDll( "workbook_add_chart", workbook, chart_type )
  * frees the object itself.
  *
  * @code
- *     workbook_close(workbook)
+ *     workbook_close(workbook);
  * @endcode
  *
- * The `%workbook_close()` function returns any #FUNCTION error codes
+ * The `%workbook_close()` function returns any #lxw_error error codes
  * encountered when creating the Excel file. The error code can be returned
  * from the program main or the calling function:
  *
  * @code
- *     return workbook_close(workbook)
+ *     return workbook_close(workbook);
  * @endcode
  *
  */
@@ -333,10 +343,11 @@ RETURN CallDll( "workbook_close", workbook )
  * - `keywords`
  * - `comments`
  * - `hyperlink_base`
+ * - `created`
  *
  * The properties are specified via a `lxw_doc_properties` struct. All the
- * members are `char *` and they are all optional. An example of how to create
- * and pass the properties is:
+ * fields are all optional. An example of how to create and pass the
+ * properties is:
  *
  * @code
  *     // Create a properties structure and set some of the fields.
@@ -353,50 +364,20 @@ RETURN CallDll( "workbook_close", workbook )
  *     };
  *
  *     // Set the properties in the workbook.
- *     workbook_set_properties(workbook, &properties)
+ *     workbook_set_properties(workbook, &properties);
  * @endcode
  *
  * @image html doc_properties.png
  *
+ * The `created` parameter sets the file creation date/time shown in
+ * Excel. This defaults to the current time and date if set to 0. If you wish
+ * to create files that are binary equivalent (for the same input data) then
+ * you should set this creation date/time to a known value using a `time_t`
+ * value.
+ *
  */
 FUNCTION lxw_workbook_set_properties( workbook, properties)
-LOCAL oProperties , pProperties
-oProperties := hb_CStructure( "lxw_doc_properties" ):Buffer()
-IF HB_HHaskey( properties, "title" )
-   oProperties:title         := properties[ "title"          ]
-ENDIF
-IF HB_HHaskey( properties, "subject" )
-   oProperties:subject       := properties[ "subject"        ]
-ENDIF
-IF HB_HHaskey( properties, "author" )
-   oProperties:author        := properties[ "author"         ]
-ENDIF
-IF HB_HHaskey( properties, "manager" )
-   oProperties:manager       := properties[ "manager"        ]
-ENDIF
-IF HB_HHaskey( properties, "company" )
-   oProperties:company       := properties[ "company"        ]
-ENDIF
-IF HB_HHaskey( properties, "category" )
-   oProperties:category      := properties[ "category"       ]
-ENDIF
-IF HB_HHaskey( properties, "keywords" )
-   oProperties:keywords      := properties[ "keywords"       ]
-ENDIF
-IF HB_HHaskey( properties, "comments" )
-   oProperties:comments      := properties[ "comments"       ]
-ENDIF
-IF HB_HHaskey( properties, "status" )
-   oProperties:status        := properties[ "status"         ]
-ENDIF
-IF HB_HHaskey( properties, "hyperlink_base" )
-   oProperties:hyperlink_base:= properties[ "hyperlink_base" ]
-ENDIF
-IF HB_HHaskey( properties, "created" )
-   oProperties:created       := properties[ "created"        ]
-ENDIF
-pProperties:= oProperties:GetPointer()
-RETURN CallDll( "workbook_set_properties", workbook, pProperties )
+RETURN CallDll( "workbook_set_properties", workbook, lxw_prepare_doc_properties( properties ) )
 
 /**
  * @brief Set a custom document text property.
@@ -497,15 +478,8 @@ RETURN CallDll( "workbook_set_custom_property_boolean", workbook, name, value )
  * @endcode
  */
 FUNCTION lxw_workbook_set_custom_property_datetime( workbook, name, datetime)
-LOCAL oDateTime , pDatetime
-oDatetime := hb_CStructure( "LXW_DATETIME" ):Buffer()
-oDatetime:year:= YEAR(datetime)
-oDatetime:month:= MONTH(datetime)
-oDatetime:day:= DAY(datetime)
-oDatetime:hour:= HB_HOUR(datetime)
-oDatetime:min:= HB_MINUTE(datetime)
-oDatetime:sec:= HB_SEC(datetime)
-pDatetime:= oDatetime:GetPointer()
+LOCAL pDatetime
+pDatetime:= LXW_DATETIME( YEAR(datetime), MONTH(datetime), DAY(datetime), HB_HOUR(datetime), HB_MINUTE(datetime), HB_SEC(datetime) )
 RETURN CallDll( "workbook_set_custom_property_datetime", workbook, name, pDatetime )
 
 /**
@@ -649,7 +623,6 @@ RETURN CallDll( "workbook_validate_worksheet_name", workbook, sheetname )
 FUNCTION lxw_worksheet_write_number(worksheet, row, col, number, format)
 RETURN CallDll( "worksheet_write_number", worksheet, row, col, ToDouble(number), format )
 
-
 /**
  * @brief Write a string to a worksheet cell.
  *
@@ -688,7 +661,7 @@ RETURN CallDll( "worksheet_write_number", worksheet, row, col, ToDouble(number),
  * a UTF-8 source:
  *
  * @code
- *    worksheet_write_string(worksheet, 0, 0, "Это фраза на русском!", NULL)
+ *    worksheet_write_string(worksheet, 0, 0, "Это фраза на руѝѝком!", NULL)
  * @endcode
  *
  * @image html write_string03.png
@@ -799,13 +772,13 @@ RETURN CallDll( "worksheet_write_array_formula", worksheet, first_row, first_col
 /**
  * @brief Write a date or time to a worksheet cell.
  *
- * @param worksheet pointer to a lxw_worksheet instance to be updated.
+ * @param worksheet Pointer to a lxw_worksheet instance to be updated.
  * @param row       The zero indexed row number.
  * @param col       The zero indexed column number.
  * @param datetime  The datetime to write to the cell.
  * @param format    A pointer to a Format instance or NULL.
  *
- * @return A #FUNCTION code.
+ * @return A #lxw_error code.
  *
  * The `worksheet_write_datetime()` function can be used to write a date or
  * time to the cell specified by `row` and `column`:
@@ -824,15 +797,8 @@ RETURN CallDll( "worksheet_write_array_formula", worksheet, first_row, first_col
  * times in libxlsxwriter.
  */
 FUNCTION lxw_worksheet_write_datetime(worksheet, row, col, datetime, format )
-LOCAL oDateTime , pDatetime
-oDatetime := hb_CStructure( "LXW_DATETIME" ):Buffer()
-oDatetime:year:= YEAR(datetime)
-oDatetime:month:= MONTH(datetime)
-oDatetime:day:= DAY(datetime)
-oDatetime:hour:= HB_HOUR(datetime)
-oDatetime:min:= HB_MINUTE(datetime)
-oDatetime:sec:= HB_SEC(datetime)
-pDatetime:= oDatetime:GetPointer()
+LOCAL pDatetime
+pDatetime:= LXW_DATETIME( YEAR(datetime), MONTH(datetime), DAY(datetime), HB_HOUR(datetime), HB_MINUTE(datetime), HB_SEC(datetime) )
 RETURN CallDll( "worksheet_write_datetime", worksheet, row, col, pDatetime, format )
 
 
@@ -1320,6 +1286,7 @@ RETURN CallDll( "worksheet_set_column", worksheet, first_col, last_col, ToDouble
  * best to aFUNCTION BMP images since they aren't compressed. If used, BMP images
  * must be 24 bit, true color, bitmaps.
  */
+
 FUNCTION lxw_worksheet_insert_image(worksheet, row, col, filename)
 RETURN CallDll( "worksheet_insert_image", worksheet, row, col, filename )
 /**
@@ -1350,8 +1317,9 @@ RETURN CallDll( "worksheet_insert_image", worksheet, row, col, filename )
  * @note See the notes about row scaling and BMP images in
  * `worksheet_insert_image()` above.
  */
-//FUNCTION lxw_worksheet_insert_image_opt(worksheet, row, col, filename, lxw_image_options *options)
-//RETURN CallDll( "worksheet_insert_image_opt", worksheet, row, col, filename, options )
+FUNCTION lxw_worksheet_insert_image_opt(worksheet, row, col, filename, options)
+RETURN CallDll( "worksheet_insert_image_opt", worksheet, row, col, filename, lxw_prepare_image_options(options) )
+
 /**
  * @brief Insert a chart object into a worksheet.
  *
@@ -1400,28 +1368,25 @@ RETURN CallDll( "worksheet_insert_chart", worksheet, row, col, chart )
  * @param chart        A #lxw_chart object created via workbook_add_chart().
  * @param user_options Optional chart parameters.
  *
- * @return A #FUNCTION code.
+ * @return A #lxw_error code.
  *
  * The `%worksheet_insert_chart_opt()` function is like
  * `worksheet_insert_chart()` function except that it takes an optional
- * #lxw_image_options struct to scale and position the image of the chart:
+ * #lxw_chart_options struct to scale and position the chart:
  *
  * @code
- *    lxw_image_options options = {.x_offset = 30,  .y_offset = 10,
+ *    lxw_chart_options options = {.x_offset = 30,  .y_offset = 10,
  *                                 .x_scale  = 0.5, .y_scale  = 0.75};
  *
- *    worksheet_insert_chart_opt(worksheet, 0, 2, chart, &options)
+ *    worksheet_insert_chart_opt(worksheet, 0, 2, chart, &options);
  *
  * @endcode
  *
  * @image html chart_line_opt.png
  *
- * The #lxw_image_options struct is the same struct used in
- * `worksheet_insert_image_opt()` to position and scale images.
- *
  */
-//FUNCTION lxw_worksheet_insert_chart_opt(worksheet, row, col, chart, lxw_image_options *user_options)
-//RETURN CallDll( "worksheet_insert_chart_opt", worksheet, row, col, chart, user_options )
+FUNCTION lxw_worksheet_insert_chart_opt(worksheet, row, col, chart, options)
+RETURN CallDll( "worksheet_insert_chart_opt", worksheet, row, col, chart, lxw_prepare_chart_options(options) )
 
 /**
  * @brief Merge a range of cells.
@@ -2144,41 +2109,39 @@ RETURN CallDll( "worksheet_set_footer", worksheet, string )
  *
  */
 FUNCTION lxw_worksheet_set_h_pagebreaks(worksheet, breaks )
-LOCAL oBreaks, pBreaks
-oBreaks := hb_CStructure( "LXW_ARRAY_INT_10" ):Buffer()
+LOCAL pBreaks, element1, element2, element3, element4, element5, element6, element7, element8, element9, element10
 IF LEN( breaks ) > 0
-   oBreaks:element1:= breaks[1]
+   element1:= breaks[1]
 ENDIF
 IF LEN( breaks ) > 1
-   oBreaks:element2:= breaks[2]
+   element2:= breaks[2]
 ENDIF
 IF LEN( breaks ) > 2
-   oBreaks:element3:= breaks[3]
+   element3:= breaks[3]
 ENDIF
 IF LEN( breaks ) > 3
-   oBreaks:element4:= breaks[4]
+   element4:= breaks[4]
 ENDIF
 IF LEN( breaks ) > 4
-   oBreaks:element5:= breaks[5]
+   element5:= breaks[5]
 ENDIF
 IF LEN( breaks ) > 5
-   oBreaks:element6:= breaks[6]
+   element6:= breaks[6]
 ENDIF
 IF LEN( breaks ) > 6
-   oBreaks:element7:= breaks[7]
+   element7:= breaks[7]
 ENDIF
 IF LEN( breaks ) > 7
-   oBreaks:element8:= breaks[8]
+   element8:= breaks[8]
 ENDIF
 IF LEN( breaks ) > 8
-   oBreaks:element9:= breaks[9]
+   element9:= breaks[9]
 ENDIF
 IF LEN( breaks ) > 9
-   oBreaks:element10:= breaks[10]
+   element10:= breaks[10]
 ENDIF
-pBreaks:= oBreaks:GetPointer()
+pBreaks:= LXW_ARRAY_INT_10( element1, element2, element3, element4, element5, element6, element7, element8, element9, element10 )
 RETURN CallDll( "worksheet_set_h_pagebreaks", worksheet, pBreaks )
-//RETURN hb_DynCall( { "worksheet_set_h_pagebreaks", nHDll, HB_DYN_CALLCONV_SYSCALL, , HB_DYN_CTYPE_STRUCTURE, HB_DYN_CTYPE_STRUCTURE }, worksheet, breaks )
 
 /**
  * @brief Set the vertical page breaks on a worksheet.
@@ -2654,7 +2617,7 @@ RETURN CallDll( "worksheet_set_tab_color", worksheet, color )
  */
 //FUNCTION lxw_worksheet_protect(worksheet, password, lxw_protection *options)
 FUNCTION lxw_worksheet_protect(worksheet, password, options)
-RETURN CallDll( "worksheet_protect", worksheet, password, options )
+RETURN CallDll( "worksheet_protect", worksheet, password, lxw_prepare_protection(options) )
 
 /**
  * @brief Set the default row properties.
@@ -3524,7 +3487,11 @@ col_name:= LEFT(col_name, LEN(RTRIM(col_name))-1)
 RETURN ret
 
 FUNCTION lxw_rowcol_to_cell(cell_name, row, col)
-RETURN CallDll( "lxw_rowcol_to_cell", cell_name, row, col )
+LOCAL ret
+cell_name:= SPACE(10)
+ret:= CallDll( "lxw_rowcol_to_cell", @cell_name, row, col )
+cell_name:= LEFT(cell_name, LEN(RTRIM(cell_name))-1)
+RETURN ret
 
 FUNCTION lxw_rowcol_to_cell_abs(cell_name, row, col, abs_row, abs_col)
 RETURN CallDll( "lxw_rowcol_to_cell_abs", cell_name, row, col, abs_row, abs_col )
@@ -3551,11 +3518,7 @@ RETURN CallDll( "lxw_name_to_row_2", row_str )
 FUNCTION lxw_name_to_col_2( col_str)
 RETURN CallDll( "lxw_name_to_col_2", col_str )
 
-
-
 // CHART ==============================================================================================================
-
-
 
 /**
  * @brief Add a data series to a chart.
@@ -3768,9 +3731,7 @@ RETURN CallDll( "chart_series_set_name_range", series, sheetname, row, col)
  * For more information see @ref chart_lines.
  */
 FUNCTION lxw_chart_series_set_line(series, line)
-LOCAL pLine
-pLine:= lxw_prepare_chart_line(line)
-RETURN CallDll( "chart_series_set_line", series, pLine )
+RETURN CallDll( "chart_series_set_line", series, lxw_prepare_chart_line(line) )
 
 /**
  * @brief Set the fill properties for a chart series.
@@ -3824,9 +3785,7 @@ RETURN CallDll( "chart_series_set_fill", series, fill )
  * For more information see #lxw_chart_pattern_type and @ref chart_patterns.
  */
 FUNCTION lxw_chart_series_set_pattern(series, pattern)
-LOCAL  pPattern
-pPattern:= lxw_prepare_chart_pattern(pattern)
-RETURN CallDll( "chart_series_set_pattern", series, pPattern )
+RETURN CallDll( "chart_series_set_pattern", series, lxw_prepare_chart_pattern(pattern) )
 
 /**
  * @brief Set the data marker type for a series.
@@ -3935,9 +3894,7 @@ RETURN CallDll( "chart_series_set_marker_size", series, size )
  * For more information see @ref chart_lines.
  */
 FUNCTION lxw_chart_series_set_marker_line(series, line)
-LOCAL pLine
-pLine:= lxw_prepare_chart_line(line)
-RETURN CallDll( "chart_series_set_marker_line", series, pLine )
+RETURN CallDll( "chart_series_set_marker_line", series, lxw_prepare_chart_line(line) )
 
 /**
  * @brief Set the fill properties for a chart series marker.
@@ -3971,9 +3928,7 @@ RETURN CallDll( "chart_series_set_marker_fill", series, fill )
  * For more information see #lxw_chart_pattern_type and @ref chart_patterns.
  */
 FUNCTION lxw_chart_series_set_marker_pattern(series, pattern)
-LOCAL  pPattern
-pPattern:= lxw_prepare_chart_pattern(pattern)
-RETURN CallDll( "chart_series_set_marker_pattern", series, pPattern )
+RETURN CallDll( "chart_series_set_marker_pattern", series, lxw_prepare_chart_pattern(pattern) )
 
 /**
  * @brief Set the name caption of the an axis.
@@ -4072,9 +4027,7 @@ RETURN CallDll( "chart_axis_set_name_font", axis, pFont )
  * For more information see @ref chart_fonts.
  */
 FUNCTION lxw_chart_axis_set_num_font(axis, font)
-LOCAL  pFont
-pFont:= lxw_prepare_chart_font(font)
-RETURN CallDll( "chart_axis_set_num_font", axis, pFont )
+RETURN CallDll( "chart_axis_set_num_font", axis, lxw_prepare_chart_font(font) )
 
 /**
  * @brief Set the line properties for a chart axis.
@@ -4096,9 +4049,7 @@ RETURN CallDll( "chart_axis_set_num_font", axis, pFont )
  * For more information see @ref chart_lines.
  */
 FUNCTION lxw_chart_axis_set_line(axis, line)
-LOCAL pLine
-pLine:= lxw_prepare_chart_line(line)
-RETURN CallDll( "chart_axis_set_line", axis, pLine )
+RETURN CallDll( "chart_axis_set_line", axis, lxw_prepare_chart_line(line) )
 
 /**
  * @brief Set the fill properties for a chart axis.
@@ -4136,9 +4087,7 @@ RETURN CallDll( "chart_axis_set_fill", axis, fill )
  * For more information see #lxw_chart_pattern_type and @ref chart_patterns.
  */
 FUNCTION lxw_chart_axis_set_pattern(axis, pattern)
-LOCAL pPattern
-pPattern:= lxw_prepare_chart_pattern(pattern)
-RETURN CallDll( "chart_axis_set_pattern", axis, pPattern )
+RETURN CallDll( "chart_axis_set_pattern", axis, lxw_prepare_chart_pattern(pattern) )
 
 /**
  * @brief Reverse the order of the axis categories or values.
@@ -4297,10 +4246,7 @@ RETURN CallDll( "chart_title_set_name_range", chart, sheetname, row, col )
  * For more information see @ref chart_fonts.
  */
 FUNCTION lxw_chart_title_set_name_font(chart, font)
-LOCAL  pFont
-pFont:= lxw_prepare_chart_font(font)
-RETURN CallDll( "chart_title_set_name_font", chart, pFont )
-
+RETURN CallDll( "chart_title_set_name_font", chart, lxw_prepare_chart_font(font) )
 
 /**
  * @brief Turn off an automatic chart title.
@@ -4377,10 +4323,80 @@ RETURN CallDll( "chart_legend_set_position", chart, position )
  * For more information see @ref chart_fonts.
  */
 FUNCTION lxw_chart_legend_set_font(chart, font)
-LOCAL pFont
-pFont:= lxw_prepare_chart_font(font)
-RETURN CallDll( "chart_legend_set_font", chart, pFont )
+RETURN CallDll( "chart_legend_set_font", chart, lxw_prepare_chart_font(font) )
 
+/**
+ * @brief Add data labels to a chart series.
+ *
+ * @param series A series object created via `chart_add_series()`.
+ *
+ * The `%chart_series_set_labels()` function is used to turn on data labels
+ * for a chart series. Data labels indicate the values of the plotted data
+ * points.
+ *
+ * @code
+ *     chart_series_set_labels(series);
+ * @endcode
+ *
+ * @image html chart_labels1.png
+ *
+ * By default data labels are displayed in Excel with only the values shown:
+ *
+ * @image html chart_labels2.png
+ *
+ * However, it is possible to configure other display options, as shown
+ * in the functions below.
+ *
+ * For more information see @ref chart_labels.
+ */
+FUNCTION lxw_chart_series_set_labels(series)
+RETURN CallDll( "chart_series_set_labels", series )
+
+/**
+ * @brief Set the display options for the labels of a data series.
+ *
+ * @param series        A series object created via `chart_add_series()`.
+ * @param show_name     Turn on/off the series name in the label caption.
+ * @param show_category Turn on/off the category name in the label caption.
+ * @param show_value    Turn on/off the value in the label caption.
+ *
+ * The `%chart_series_set_labels_options()` function is used to set the
+ * parameters that are displayed in the series data label:
+ *
+ * @code
+ *     chart_series_set_labels(series);
+ *     chart_series_set_labels_options(series, LXW_TRUE, LXW_TRUE, LXW_TRUE);
+ * @endcode
+ *
+ * @image html chart_labels3.png
+ *
+ * For more information see @ref chart_labels.
+ */
+FUNCTION lxw_chart_series_set_labels_options(series, show_name, show_category, show_value)
+RETURN CallDll( "chart_series_set_labels_options", series, show_name, show_category, show_value )
+
+/**
+ * @brief Set the percentage for a Pie/Doughnut data point.
+ *
+ * @param series A series object created via `chart_add_series()`.
+ *
+ * The `%chart_series_set_labels_percentage()` function is used to turn on
+ * the display of data labels as a percentage for a series. It is mainly
+ * used for pie charts:
+ *
+ * @code
+ *     chart_series_set_labels(series);
+ *     chart_series_set_labels_options(series, LXW_FALSE, LXW_FALSE, LXW_FALSE);
+ *     chart_series_set_labels_percentage(series);
+ * @endcode
+ *
+ * @image html chart_labels7.png
+ *
+ * For more information see @ref chart_labels.
+ */
+FUNCTION lxw_chart_series_set_labels_percentage(series)
+RETURN CallDll( "chart_series_set_labels_percentage", series )
+                                     
 /**
  * @brief Remove one or more series from the the legend.
  *
@@ -4406,8 +4422,40 @@ RETURN CallDll( "chart_legend_set_font", chart, pFont )
  *
  * @image html chart_legend_delete.png
  */
-//FUNCTION lxw_chart_legend_delete_series(lxw_chart *chart, int16_t delete_series[]);
-//RETURN CallDll( "chart_legend_delete_series", chart, delete_series )
+FUNCTION lxw_chart_legend_delete_series(chart, delete_series)
+LOCAL pDelete, element1, element2, element3, element4, element5, element6, element7, element8, element9, element10
+IF LEN( delete_series ) > 0
+   element1:= delete_series[1]
+ENDIF
+IF LEN( delete_series ) > 1
+   element2:= delete_series[2]
+ENDIF
+IF LEN( delete_series ) > 2
+   element3:= delete_series[3]
+ENDIF
+IF LEN( delete_series ) > 3
+   element4:= delete_series[4]
+ENDIF
+IF LEN( delete_series ) > 4
+   element5:= delete_series[5]
+ENDIF
+IF LEN( delete_series ) > 5
+   element6:= delete_series[6]
+ENDIF
+IF LEN( delete_series ) > 6
+   element7:= delete_series[7]
+ENDIF
+IF LEN( delete_series ) > 7
+   element8:= delete_series[8]
+ENDIF
+IF LEN( delete_series ) > 8
+   element9:= delete_series[9]
+ENDIF
+IF LEN( delete_series ) > 9
+   element10:= delete_series[10]
+ENDIF
+pDelete:= LXW_ARRAY_INT8_10( element1, element2, element3, element4, element5, element6, element7, element8, element9, element10 )
+RETURN CallDll( "chart_legend_delete_series", chart, pDelete )
 
 /**
  * @brief Set the line properties for a chartarea.
@@ -4431,9 +4479,7 @@ RETURN CallDll( "chart_legend_set_font", chart, pFont )
  * For more information see @ref chart_lines.
  */
 FUNCTION lxw_chart_chartarea_set_line(chart, line)
-LOCAL pLine
-pLine:= lxw_prepare_chart_line(line)
-RETURN CallDll( "chart_chartarea_set_line", chart, pLine )
+RETURN CallDll( "chart_chartarea_set_line", chart, lxw_prepare_chart_line(line) )
 
 /**
  * @brief Set the fill properties for a chartarea.
@@ -4469,9 +4515,7 @@ RETURN CallDll( "chart_chartarea_set_line", chart, pLine )
  * For more information see #lxw_chart_pattern_type and @ref chart_patterns.
  */
 FUNCTION lxw_chart_chartarea_set_pattern(chart, pattern)
-LOCAL pPattern
-pPattern:= lxw_prepare_chart_pattern(pattern)
-RETURN CallDll( "chart_chartarea_set_pattern", chart, pPattern )
+RETURN CallDll( "chart_chartarea_set_pattern", chart, lxw_prepare_chart_pattern(pattern) )
 
 /**
  * @brief Set the line properties for a plotarea.
@@ -4498,9 +4542,7 @@ RETURN CallDll( "chart_chartarea_set_pattern", chart, pPattern )
  * For more information see @ref chart_lines.
  */
 FUNCTION lxw_chart_plotarea_set_line(chart, line)
-LOCAL pLine
-pLine:= lxw_prepare_chart_line(line)
-RETURN CallDll( "chart_plotarea_set_line", chart, pLine )
+RETURN CallDll( "chart_plotarea_set_line", chart, lxw_prepare_chart_line(line) )
 
 /**
  * @brief Set the fill properties for a plotarea.
@@ -4536,9 +4578,7 @@ RETURN CallDll( "chart_plotarea_set_line", chart, pLine )
  * For more information see #lxw_chart_pattern_type and @ref chart_patterns.
  */
 FUNCTION lxw_chart_plotarea_set_pattern(chart, pattern)
-LOCAL pPattern
-pPattern:= lxw_prepare_chart_pattern(pattern)
-RETURN CallDll( "chart_plotarea_set_pattern", chart, pPattern )
+RETURN CallDll( "chart_plotarea_set_pattern", chart, lxw_prepare_chart_pattern(pattern) )
 
 /**
  * @brief Set the chart style type.
@@ -4580,29 +4620,116 @@ RETURN CallDll( "chart_set_hole_size", chart, size )
 //FUNCTION lxw_chart_add_data_cache(range, data, rows, cols, col)
 //RETURN CallDll( "lxw_chart_add_data_cache", range, data, rows, cols, col )
 
+FUNCTION lxw_prepare_workbook_option( options )
+RETURN LXW_GET_WORKBOOK_OPTIONS(;
+   HB_HGETDEF( options, "constant_memory", Nil ),;
+   HB_HGETDEF( options, "tmpdir", Nil ),;
+   HB_HGETDEF( options, "use_zip64", Nil ) )
 
-/** @brief Struct to represent a date and time in Excel.
- *
- * Struct to represent a date and time in Excel. See @ref working_with_dates.
- */
-    /** Year     : 1900 - 9999 */
-    /** Month    : 1 - 12 */
-    /** Day      : 1 - 31 */
-    /** Hour     : 0 - 23 */
-    /** Minute   : 0 - 59 */
-    /** Seconds  : 0 - 59.999 */
-pragma pack(8) 
-typedef struct lxw_datetime {;
-    int year;
-    int month;
-    int day;
-    int hour;
-    int min;
-    DOUBLE sec;
-} lxw_datetime;
+FUNCTION lxw_prepare_doc_properties( properties ) 
+RETURN LXW_DOC_PROPERTIES(;
+   HB_HGETDEF( properties, "title", Nil ),;
+   HB_HGETDEF( properties, "subject", Nil ),;
+   HB_HGETDEF( properties, "author", Nil ),;
+   HB_HGETDEF( properties, "manager", Nil ),;
+   HB_HGETDEF( properties, "company", Nil ),;
+   HB_HGETDEF( properties, "category", Nil ),;
+   HB_HGETDEF( properties, "keywords", Nil ),;
+   HB_HGETDEF( properties, "comments", Nil ),;
+   HB_HGETDEF( properties, "status", Nil ),;
+   HB_HGETDEF( properties, "hyperlink_base", Nil ),;
+   HB_HGETDEF( properties, "created", Nil ) )
 
-pragma pack(8) 
-typedef struct lxw_array_int_10 {;
+FUNCTION lxw_prepare_chart_font(font)
+RETURN LXW_GET_CHART_FONT(;
+   HB_HGETDEF( font, "name"        , Nil ),;
+   HB_HGETDEF( font, "size"        , Nil ),;
+   HB_HGETDEF( font, "bold"        , Nil ),;
+   HB_HGETDEF( font, "italic"      , Nil ),;
+   HB_HGETDEF( font, "underline"   , Nil ),;
+   HB_HGETDEF( font, "rotation"    , Nil ),;
+   HB_HGETDEF( font, "color"       , Nil ),;
+   HB_HGETDEF( font, "pitch_family", Nil ),;
+   HB_HGETDEF( font, "charset"     , Nil ),;
+   HB_HGETDEF( font, "baseline"    , Nil ) )
+
+FUNCTION lxw_prepare_chart_pattern(pattern)
+RETURN LXW_GET_CHART_PATTERN(;
+   HB_HGETDEF( pattern, "fg_color", Nil ),;
+   HB_HGETDEF( pattern, "bg_color", Nil ),;
+   HB_HGETDEF( pattern, "type", Nil ) )
+
+FUNCTION lxw_prepare_chart_line(line)
+RETURN LXW_GET_CHART_LINE(;
+   HB_HGETDEF( line, "color", Nil ),;
+   HB_HGETDEF( line, "none", Nil ),;
+   HB_HGETDEF( line, "dash_type", Nil ),;
+   HB_HGETDEF( line, "transparency", Nil ),;
+   HB_HGETDEF( line, "has_color", Nil ) )
+
+FUNCTION lxw_prepare_image_options(opt)
+RETURN LXW_GET_IMAGE_OPTIONS(;
+   HB_HGETDEF( opt, "x_offset", Nil ),; 
+   HB_HGETDEF( opt, "y_offset", Nil ),; 
+   HB_HGETDEF( opt, "x_scale" , Nil ),; 
+   HB_HGETDEF( opt, "y_scale" , Nil ),; 
+   HB_HGETDEF( opt, "object_position", Nil ),; 
+   HB_HGETDEF( opt, "description", Nil ),; 
+   HB_HGETDEF( opt, "url", Nil ),; 
+   HB_HGETDEF( opt, "tip", Nil ) )
+
+FUNCTION lxw_prepare_chart_options(options)
+LOCAL pOptions
+IF HB_ISHASH( options )
+   pOptions:= LXW_GET_CHART_OPTIONS(;
+      HB_HGETDEF( options, "x_offset", Nil ),;
+      HB_HGETDEF( options, "y_offset", Nil ),;
+      HB_HGETDEF( options, "x_scale" , Nil ),;
+      HB_HGETDEF( options, "y_scale" , Nil ),;
+      HB_HGETDEF( options, "object_position", Nil ) )
+ELSE
+   pOptions:= options
+ENDIF
+RETURN pOptions
+
+FUNCTION lxw_prepare_protection(options)
+RETURN LXW_GET_PROTECTION(;
+   HB_HGETDEF( options, "no_select_locked_cells", Nil ),;
+   HB_HGETDEF( options, "format_cells"          , Nil ),;
+   HB_HGETDEF( options, "format_columns"        , Nil ),;
+   HB_HGETDEF( options, "format_rows"           , Nil ),;
+   HB_HGETDEF( options, "insert_columns"        , Nil ),;
+   HB_HGETDEF( options, "insert_rows"           , Nil ),;
+   HB_HGETDEF( options, "insert_hyperlinks"     , Nil ),;
+   HB_HGETDEF( options, "delete_columns"        , Nil ),;
+   HB_HGETDEF( options, "delete_rows"           , Nil ),;
+   HB_HGETDEF( options, "sort"                  , Nil ),;
+   HB_HGETDEF( options, "autofilter"            , Nil ),;
+   HB_HGETDEF( options, "pivot_tables"          , Nil ),;
+   HB_HGETDEF( options, "scenarios"             , Nil ),;
+   HB_HGETDEF( options, "objects"               , Nil ),;
+   HB_HGETDEF( options, "no_content"            , Nil ),;
+   HB_HGETDEF( options, "no_objects"            , Nil ) )
+
+#pragma BEGINDUMP
+
+ #include "hbapi.h"
+ #include "xlsxwriter.h"
+ #include "hbapiitm.h"
+
+HB_FUNC( LXW_GET_X_AXYS )
+{
+   lxw_chart *chart = (lxw_chart*) hb_parni(1);
+   return hb_retptr( chart->x_axis );
+}
+
+HB_FUNC( LXW_GET_Y_AXYS )
+{
+   lxw_chart *chart = (lxw_chart*) hb_parni(1);
+   return hb_retptr( chart->y_axis );
+}
+
+typedef struct lxw_array_int_10 {
     int element1;
     int element2;
     int element3;
@@ -4615,6 +4742,91 @@ typedef struct lxw_array_int_10 {;
     int element10;
 } lxw_array_int_10;
 
+HB_FUNC( LXW_ARRAY_INT_10 )
+{
+   lxw_array_int_10 * hlxw_array_int_10 = ( lxw_array_int_10 * ) hb_xgrab( sizeof( lxw_array_int_10 ) );
+
+   hlxw_array_int_10->element1  = (int) hb_parni(1);
+   hlxw_array_int_10->element2  = (int) hb_parni(2);
+   hlxw_array_int_10->element3  = (int) hb_parni(3);
+   hlxw_array_int_10->element4  = (int) hb_parni(4);
+   hlxw_array_int_10->element5  = (int) hb_parni(5);
+   hlxw_array_int_10->element6  = (int) hb_parni(6);
+   hlxw_array_int_10->element7  = (int) hb_parni(7);
+   hlxw_array_int_10->element8  = (int) hb_parni(8);
+   hlxw_array_int_10->element9  = (int) hb_parni(9);
+   hlxw_array_int_10->element10 = (int) hb_parni(10);
+
+   hb_retptr( hlxw_array_int_10 );
+}
+
+typedef struct lxw_array_int8_10 {
+    int16_t element1;
+    int16_t element2;
+    int16_t element3;
+    int16_t element4;
+    int16_t element5;
+    int16_t element6;
+    int16_t element7;
+    int16_t element8;
+    int16_t element9;
+    int16_t element10;
+} lxw_array_int8_10;
+
+HB_FUNC( LXW_ARRAY_INT8_10 )
+{
+   lxw_array_int8_10 * hlxw_array_int8_10 = ( lxw_array_int8_10 * ) hb_xgrab( sizeof( lxw_array_int8_10 ) );
+
+   hlxw_array_int8_10->element1  = (int16_t) hb_parni(1);
+   hlxw_array_int8_10->element2  = (int16_t) hb_parni(2);
+   hlxw_array_int8_10->element3  = (int16_t) hb_parni(3);
+   hlxw_array_int8_10->element4  = (int16_t) hb_parni(4);
+   hlxw_array_int8_10->element5  = (int16_t) hb_parni(5);
+   hlxw_array_int8_10->element6  = (int16_t) hb_parni(6);
+   hlxw_array_int8_10->element7  = (int16_t) hb_parni(7);
+   hlxw_array_int8_10->element8  = (int16_t) hb_parni(8);
+   hlxw_array_int8_10->element9  = (int16_t) hb_parni(9);
+   hlxw_array_int8_10->element10 = (int16_t) hb_parni(10);
+
+   hb_retptr( hlxw_array_int8_10 );
+}
+
+/** @brief Struct to represent a date and time in Excel.
+ *
+ * Struct to represent a date and time in Excel. See @ref working_with_dates.
+ */
+/*
+typedef struct lxw_datetime {
+
+    // Year     : 1900 - 9999 
+    int year;
+    // Month    : 1 - 12 
+    int month;
+    // Day      : 1 - 31 
+    int day;
+    // Hour     : 0 - 23 
+    int hour;
+    // Minute   : 0 - 59 
+    int min;
+    // Seconds  : 0 - 59.999
+    double sec;
+
+} lxw_datetime;
+*/
+HB_FUNC( LXW_DATETIME )
+{
+   lxw_datetime * hlxw_datetime = ( lxw_datetime * ) hb_xgrab( sizeof( lxw_datetime ) );
+
+   hlxw_datetime->year  = (int) hb_parni(1);
+   hlxw_datetime->month = (int) hb_parni(2);
+   hlxw_datetime->day   = (int) hb_parni(3);
+   hlxw_datetime->hour  = (int) hb_parni(4);
+   hlxw_datetime->min   = (int) hb_parni(5);
+   hlxw_datetime->sec   = (double) hb_parnd(6);
+
+   hb_retptr( hlxw_datetime );
+}
+
 /**
  * @brief Workbook options.
  *
@@ -4623,150 +4835,142 @@ typedef struct lxw_array_int_10 {;
  *
  * The following properties are supported:
  *
- * - `constant_memory`: Reduces the amount of data stored in memory so that
- *   large files can be written efficiently.
+ * - `constant_memory`: This option reduces the amount of data stored in
+ *   memory so that large files can be written efficiently. This option is off
+ *   by default. See the notes below for limitations when this mode is on.
  *
- *   @note In this mode a row of data is written and then discarded when a
- *   cell in a new row is added via one of the `worksheet_write_*()`
- *   functions. Therefore, once this option is active, data should be written in
- *   sequential row order. For this reason the `worksheet_merge_range()`
- *   doesn't work in this mode. See also @ref ww_mem_constant.
- *
- * - `tmpdir`: libxlsxwriter stores workbook data in temporary files prior
- *   to assembling the final XLSX file. The temporary files are created in the
+ * - `tmpdir`: libxlsxwriter stores workbook data in temporary files prior to
+ *   assembling the final XLSX file. The temporary files are created in the
  *   system's temp directory. If the default temporary directory isn't
  *   accessible to your application, or doesn't contain enough space, you can
- *   specify an alternative location using the `tempdir` option.
+ *   specify an alternative location using the `tmpdir` option.
+ *
+ * - `use_zip64`: Make the zip library use ZIP64 extensions when writing very
+ *   large xlsx files to allow the zip container, or individual XML files
+ *   within it, to be greater than 4 GB. See [ZIP64 on Wikipedia][zip64_wiki]
+ *   for more information. This option is off by default.
+ *
+ *   [zip64_wiki]: https://en.wikipedia.org/wiki/Zip_(file_format)#ZIP64
+ *
+ * @note In `constant_memory` mode each row of in-memory data is written to
+ * disk and then freed when a new row is started via one of the
+ * `worksheet_write_*()` functions. Therefore, once this option is active data
+ * should be written in sequential row by row order. For this reason
+ * `worksheet_merge_range()` and some other row based functionality doesn't
+ * work in this mode. See @ref ww_mem_constant for more details.
+ *
+ * @note Also, in `constant_memory` mode the library uses temp file storage
+ * for worksheet data. This can lead to an issue on OSes that map the `/tmp`
+ * directory into memory since it is possible to consume the "system" memory
+ * even though the "process" memory remains constant. In these cases you
+ * should use an alternative temp file location by using the `tmpdir` option
+ * shown above. See @ref ww_mem_temp for more details.
  */
-pragma pack(8) 
-typedef struct lxw_workbook_options {;
-    UCHAR constant_memory;
-    LPCSTR tmpdir;
+ /*
+typedef struct lxw_workbook_options {
+    // Optimize the workbook to use constant memory for worksheets. 
+    uint8_t constant_memory;
+
+    // Directory to use for the temporary files created by libxlsxwriter.
+    char *tmpdir;
+
+    // Allow ZIP64 extensions when creating the xlsx file zip container. 
+    uint8_t use_zip64;
+
 } lxw_workbook_options;
+*/
+HB_FUNC( LXW_GET_WORKBOOK_OPTIONS )
+{
+   lxw_workbook_options * hlxw_workbook_options = ( lxw_workbook_options * ) hb_xgrab( sizeof( lxw_workbook_options ) );
+
+   hlxw_workbook_options->constant_memory = (uint8_t) hb_parni(1);
+   hlxw_workbook_options->tmpdir = (char*) hb_parc(2);
+   hlxw_workbook_options->use_zip64 = (uint8_t) hb_parni(3);
+
+   hb_retptr( hlxw_workbook_options );
+}
 
 /**
- * Workbook document properties.
+ * Workbook document properties. Set any unused fields to NULL or 0.
  */
-    /** The title of the Excel Document. */
-    /** The subject of the Excel Document. */
-    /** The author of the Excel Document. */
-    /** The manager field of the Excel Document. */
-    /** The company field of the Excel Document. */
-    /** The category of the Excel Document. */
-    /** The keywords of the Excel Document. */
-    /** The comment field of the Excel Document. */
-    /** The status of the Excel Document. */
-    /** The hyperlink base url of the Excel Document. */
-pragma pack(8) 
-typedef struct lxw_doc_properties {;
-    LPCSTR title;
-    LPCSTR subject;
-    LPCSTR author;
-    LPCSTR manager;
-    LPCSTR company;
-    LPCSTR category;
-    LPCSTR keywords;
-    LPCSTR comments;
-    LPCSTR status;
-    LPCSTR hyperlink_base;
-    int created;
+ /*
+typedef struct lxw_doc_properties {
+    // The title of the Excel Document. 
+    char *title;
+
+    // The subject of the Excel Document.
+    char *subject;
+
+    // The author of the Excel Document. 
+    char *author;
+
+    // The manager field of the Excel Document. 
+    char *manager;
+
+    // The company field of the Excel Document. 
+    char *company;
+
+    // The category of the Excel Document. 
+    char *category;
+
+    // The keywords of the Excel Document. 
+    char *keywords;
+
+    // The comment field of the Excel Document. 
+    char *comments;
+
+    // The status of the Excel Document. 
+    char *status;
+
+    // The hyperlink base URL of the Excel Document. 
+    char *hyperlink_base;
+
+    // The file creation date/time shown in Excel. This defaults to the
+    // current time and date if set to 0. If you wish to create files that are
+    // binary equivalent (for the same input data) then you should set this
+    // creation date/time to a known value.
+    time_t created;
+
 } lxw_doc_properties;
-
-
-/**
- * @brief Struct to represent a chart font.
- *
- * See @ref chart_fonts.
- */
-/*
-typedef struct lxw_chart_font {;
-
-    // The chart font name, such as "Arial" or "Calibri". 
-    char *name;
-
-    // The chart font size. The default is 11. 
-    uint16_t size;
-
-    // The chart font bold property. Set to 0 or 1. 
-    uint8_t bold;
-
-    // The chart font italic property. Set to 0 or 1. 
-    uint8_t italic;
-
-    // The chart font underline property. Set to 0 or 1. 
-    uint8_t underline;
-
-    // The chart font rotation property. Range: -90 to 90. 
-    int32_t rotation;
-
-    // The chart font color. See @ref working_with_colors. 
-    lxw_color_t color;
-
-    // Members for internal use only. 
-    uint8_t pitch_family;
-    uint8_t charset;
-    int8_t baseline;
-    uint8_t has_color;
-
-} lxw_chart_font;
 */
+HB_FUNC( LXW_DOC_PROPERTIES )
+{
+   lxw_doc_properties * hlxw_doc_properties = ( lxw_doc_properties * ) hb_xgrab( sizeof( lxw_doc_properties ) );
 
-pragma pack(8) 
-typedef struct lxw_chart_font {;
-    LPCSTR name;
-    USHORT size;
-    UCHAR bold;
-    UCHAR italic;
-    UCHAR underline;
-    INT rotation;
-    INT color;
-    UCHAR pitch_family;
-    UCHAR charset;
-    char baseline;
-    UCHAR has_color;
-} lxw_chart_font;
-/*
-typedef signed char int8_t;
-typedef unsigned char   uint8_t;
-typedef short  int16_t;
-typedef unsigned short  uint16_t;
-typedef int  int32_t;
-typedef unsigned   uint32_t;
-typedef long long  int64_t;
-typedef unsigned long long   uint64_t;
-*/
+    hlxw_doc_properties->title          = (char*) hb_parc(1);
+    hlxw_doc_properties->subject        = (char*) hb_parc(2);
+    hlxw_doc_properties->author         = (char*) hb_parc(3);
+    hlxw_doc_properties->manager        = (char*) hb_parc(4);
+    hlxw_doc_properties->company        = (char*) hb_parc(5);
+    hlxw_doc_properties->category       = (char*) hb_parc(6);
+    hlxw_doc_properties->keywords       = (char*) hb_parc(7);
+    hlxw_doc_properties->comments       = (char*) hb_parc(8);
+    hlxw_doc_properties->status         = (char*) hb_parc(9);
+    hlxw_doc_properties->hyperlink_base = (char*) hb_parc(10);
+    hlxw_doc_properties->created        = 0;
 
-/**
- * @brief Struct to represent a chart pattern.
- *
- * See @ref chart_patterns.
- */
-/*
-typedef struct lxw_chart_pattern {
+   hb_retptr( hlxw_doc_properties );
+}
 
-    // The pattern foreground color. See @ref working_with_colors. 
-    lxw_color_t fg_color;
+HB_FUNC( LXW_GET_CHART_OPTIONS )
+{
+   lxw_chart_options * hlxw_chart_options = ( lxw_chart_options * ) hb_xgrab( sizeof( lxw_chart_options ) );
 
-    // The pattern background color. See @ref working_with_colors. 
-    lxw_color_t bg_color;
-
-    // The pattern type. See #lxw_chart_pattern_type. 
-    uint8_t type;
-
-    // Members for internal use only. 
-    uint8_t has_fg_color;
-    uint8_t has_bg_color;
-
-} lxw_chart_pattern;
-*/
-pragma pack(8) 
-typedef struct lxw_chart_pattern {;
-    INT fg_color;
-    INT bg_color;
-    UCHAR type;
-    UCHAR has_fg_color;
-    UCHAR has_bg_color;
-} lxw_chart_pattern;
+   hlxw_chart_options->x_offset = (int32_t) hb_parni(1);
+   hlxw_chart_options->y_offset = (int32_t) hb_parni(2); 
+   hlxw_chart_options->x_scale = (double) hb_parnd(3); 
+   hlxw_chart_options->y_scale = (double) hb_parnd(4); 
+   hlxw_chart_options->object_position = (uint8_t) hb_parni(5); 
+   
+   /*
+   printf("lib object_props->x_offset %i\n",hlxw_chart_options->x_offset);
+   printf("lib object_props->y_offset %i\n",hlxw_chart_options->y_offset);
+   printf("lib object_props->x_scale %f\n",hlxw_chart_options->x_scale);
+   printf("lib object_props->y_scale %f\n",hlxw_chart_options->y_scale);
+   printf("lib object_props->object_position %i\n",hlxw_chart_options->object_position);
+   */
+   hb_retptr( hlxw_chart_options );
+}
 
 /**
  * @brief Struct to represent a chart line.
@@ -4788,120 +4992,259 @@ typedef struct lxw_chart_line {
     // The line dash type. See #lxw_chart_line_dash_type. 
     uint8_t dash_type;
 
-    // Transparency for lines isn't generally useful. Undocumented for now. 
+    // Set the transparency of the line. 0 - 100. Default 0. 
     uint8_t transparency;
-
-    // Members for internal use only. 
-    uint8_t has_color;
 
 } lxw_chart_line;
 */
-typedef struct lxw_chart_line {;
-    INT color;
-    UCHAR none;
-    DOUBLE width;
-    UCHAR dash_type;
-    UCHAR transparency;
-    UCHAR has_color;
-} lxw_chart_line;
-
-
-FUNCTION lxw_prepare_chart_font(font)
-LOCAL oFont
-oFont := hb_CStructure( "LXW_CHART_FONT" ):Buffer()
-IF HB_HHASKEY( font, "name" )
-   oFont:name        := font[ "name"         ]
-ENDIF
-IF HB_HHASKEY( font, "size" )
-   oFont:size        := font[ "size"         ]
-ENDIF
-IF HB_HHASKEY( font, "bold" )
-   oFont:bold        := font[ "bold"         ]
-ENDIF
-IF HB_HHASKEY( font, "italic" )
-   oFont:italic      := font[ "italic"       ]
-ENDIF
-IF HB_HHASKEY( font, "underline" )
-   oFont:underline   := font[ "underline"    ]
-ENDIF
-IF HB_HHASKEY( font, "rotation" )
-   oFont:rotation    := font[ "rotation"     ]
-ENDIF
-IF HB_HHASKEY( font, "color" )
-   oFont:color       := font[ "color"        ]
-ENDIF
-IF HB_HHASKEY( font, "pitch_family" )
-   oFont:pitch_family:= font[ "pitch_family" ]
-ENDIF
-IF HB_HHASKEY( font, "charset" )
-   oFont:charset     := font[ "charset"      ]
-ENDIF
-IF HB_HHASKEY( font, "baseline" )
-   oFont:baseline    := font[ "baseline"     ]
-ENDIF
-IF HB_HHASKEY( font, "has_color" )
-   oFont:has_color   := font[ "has_color"    ]
-ENDIF
-RETURN oFont:GetPointer()
-
-
-FUNCTION lxw_prepare_chart_pattern(pattern)
-LOCAL oPattern
-oPattern := hb_CStructure( "LXW_CHART_PATTERN" ):Buffer()
-IF HB_HHASKEY( pattern, "fg_color" )
-   oPattern:fg_color:= pattern[ "fg_color" ]
-ENDIF
-IF HB_HHASKEY( pattern, "bg_color" )
-   oPattern:bg_color:= pattern[ "bg_color" ]
-ENDIF
-IF HB_HHASKEY( pattern, "type" )
-   oPattern:type:= pattern[ "type" ]
-ENDIF
-IF HB_HHASKEY( pattern, "has_fg_color" )
-   oPattern:has_fg_color:= pattern[ "has_fg_color" ]
-ENDIF
-IF HB_HHASKEY( pattern, "has_bg_color" )
-   oPattern:has_bg_color:= pattern[ "has_bg_color" ]
-ENDIF
-RETURN oPattern:GetPointer()
-
-
-FUNCTION lxw_prepare_chart_line(line)
-LOCAL oLine
-oLine := hb_CStructure( "LXW_CHART_LINE" ):Buffer()
-IF HB_HHASKEY( line, "color" )
-   oLine:color:= line[ "color" ]
-ENDIF
-IF HB_HHASKEY( line, "none" )
-   oLine:none:= line[ "none" ]
-ENDIF
-IF HB_HHASKEY( line, "dash_type" )
-   oLine:dash_type:= line[ "dash_type" ]
-ENDIF
-IF HB_HHASKEY( line, "transparency" )
-   oLine:transparency:= line[ "transparency" ]
-ENDIF
-IF HB_HHASKEY( line, "has_color" )
-   oLine:has_color:= line[ "has_color" ]
-ENDIF
-RETURN oLine:GetPointer()
-
-
-#pragma BEGINDUMP
-
- #include "hbapi.h"
- #include "xlsxwriter.h"
-
-HB_FUNC( LXW_GET_X_AXYS )
+HB_FUNC( LXW_GET_CHART_LINE )
 {
-   lxw_chart *chart = (lxw_chart*) hb_parni(1);
-   return hb_retptr( chart->x_axis );
+   lxw_chart_line * hlxw_chart_line = ( lxw_chart_line * ) hb_xgrab( sizeof( lxw_chart_line ) );
+
+   hlxw_chart_line->color        = (lxw_color_t) hb_parni(1);
+   hlxw_chart_line->none         = (uint8_t) hb_parni(2); 
+   hlxw_chart_line->width        = (float) hb_parnd(3); 
+   hlxw_chart_line->dash_type    = (uint8_t) hb_parni(4); 
+   hlxw_chart_line->transparency = (uint8_t) hb_parni(5); 
+   
+   hb_retptr( hlxw_chart_line );
 }
 
-HB_FUNC( LXW_GET_Y_AXYS )
+/**
+ * @brief Struct to represent a chart pattern.
+ *
+ * See @ref chart_patterns.
+ */
+ /*
+typedef struct lxw_chart_pattern {
+
+    // The pattern foreground color. See @ref working_with_colors.
+    lxw_color_t fg_color;
+
+    // The pattern background color. See @ref working_with_colors.
+    lxw_color_t bg_color;
+
+    // The pattern type. See #lxw_chart_pattern_type.
+    uint8_t type;
+
+} lxw_chart_pattern;
+*/
+HB_FUNC( LXW_GET_CHART_PATTERN )
 {
-   lxw_chart *chart = (lxw_chart*) hb_parni(1);
-   return hb_retptr( chart->y_axis );
+   lxw_chart_pattern * hlxw_chart_pattern = ( lxw_chart_pattern * ) hb_xgrab( sizeof( lxw_chart_pattern ) );
+
+   hlxw_chart_pattern->fg_color = (lxw_color_t) hb_parni(1);
+   hlxw_chart_pattern->bg_color = (lxw_color_t) hb_parni(2); 
+   hlxw_chart_pattern->type     = (uint8_t) hb_parni(3); 
+   hb_retptr( hlxw_chart_pattern );
+}
+
+/**
+ * @brief Struct to represent a chart font.
+ *
+ * See @ref chart_fonts.
+ */
+ /*
+typedef struct lxw_chart_font {
+
+    // The chart font name, such as "Arial" or "Calibri". 
+    char *name;
+
+    // The chart font size. The default is 11. 
+    double size;
+
+    // The chart font bold property. Set to 0 or 1. 
+    uint8_t bold;
+
+    // The chart font italic property. Set to 0 or 1. 
+    uint8_t italic;
+
+    // The chart font underline property. Set to 0 or 1. 
+    uint8_t underline;
+
+    // The chart font rotation property. Range: -90 to 90, and 270-271
+    //  The angle 270 gives a stacked (top to bottom) alignment.
+    //  The angle 271 gives a stacked alignment for East Asian fonts.
+    int32_t rotation;
+
+    // The chart font color. See @ref working_with_colors. 
+    lxw_color_t color;
+
+    // The chart font pitch family property. Rarely required, set to 0. 
+    uint8_t pitch_family;
+
+    // The chart font character set property. Rarely required, set to 0. 
+    uint8_t charset;
+
+    // The chart font baseline property. Rarely required, set to 0. 
+    int8_t baseline;
+
+} lxw_chart_font;
+*/
+HB_FUNC( LXW_GET_CHART_FONT )
+{
+   lxw_chart_font * hlxw_chart_font = ( lxw_chart_font * ) hb_xgrab( sizeof( lxw_chart_font ) );
+
+   hlxw_chart_font->name         = (char*)       hb_parc(1); 
+   hlxw_chart_font->size         = (double)      hb_parnd(2); 
+   hlxw_chart_font->bold         = (uint8_t)     hb_parni(3); 
+   hlxw_chart_font->italic       = (uint8_t)     hb_parni(4); 
+   hlxw_chart_font->underline    = (uint8_t)     hb_parni(5); 
+   hlxw_chart_font->rotation     = (int32_t)     hb_parni(6); 
+   hlxw_chart_font->color        = (lxw_color_t) hb_parni(7); 
+   hlxw_chart_font->pitch_family = (uint8_t)     hb_parni(8); 
+   hlxw_chart_font->charset      = (uint8_t)     hb_parni(9); 
+   hlxw_chart_font->baseline     = (int8_t)      hb_parni(10); 
+
+   hb_retptr( hlxw_chart_font );
+}
+
+/**
+ * @brief Options for inserted images.
+ *
+ * Options for modifying images inserted via `worksheet_insert_image_opt()`.
+ *
+ */
+ /*
+typedef struct lxw_image_options {
+
+    // Offset from the left of the cell in pixels. 
+    int32_t x_offset;
+
+    // Offset from the top of the cell in pixels. 
+    int32_t y_offset;
+
+    // X scale of the image as a decimal. 
+    double x_scale;
+
+    // Y scale of the image as a decimal. 
+    double y_scale;
+
+    // Object position - use one of the values of #lxw_object_position.
+     *  See @ref working_with_object_positioning.
+    uint8_t object_position;
+
+    // Optional description or "Alt text" for the image. This field can be
+     *  used to provide a text description of the image to help
+     *  accessibility. Defaults to the image filename as in Excel. Set to ""
+     *  to ignore the description field. 
+    char *description;
+
+    // Optional parameter to help accessibility. It is used to mark the image
+     *  as decorative, and thus uninformative, for automated screen
+     *  readers. As in Excel, if this parameter is in use the `description`
+     *  field isn't written. 
+    uint8_t decorative;
+
+    // Add an optional hyperlink to the image. Follows the same URL rules
+     *  and types as `worksheet_write_url()`. 
+    char *url;
+
+    // Add an optional mouseover tip for a hyperlink to the image. 
+    char *tip;
+
+} lxw_image_options;
+*/
+HB_FUNC( LXW_GET_IMAGE_OPTIONS )
+{
+
+   lxw_image_options * hlxw_image_options = ( lxw_image_options * ) hb_xgrab( sizeof( lxw_image_options ) );
+
+   hlxw_image_options->x_offset        = (int32_t) hb_parni(1);
+   hlxw_image_options->y_offset        = (int32_t) hb_parni(2);
+   hlxw_image_options->x_scale         = (double)  hb_parnd(3);
+   hlxw_image_options->y_scale         = (double)  hb_parnd(4);
+   hlxw_image_options->object_position = (uint8_t) hb_parni(5);
+   hlxw_image_options->description     = (char*)   hb_parc(6);
+   hlxw_image_options->decorative      = (uint8_t) hb_parni(7);
+   hlxw_image_options->url             = (char*)   hb_parc(8);
+   hlxw_image_options->tip             = (char*)   hb_parc(9);
+
+   hb_retptr( hlxw_image_options );
+}
+
+/**
+ * @brief Worksheet protection options.
+ */
+/*
+typedef struct lxw_protection {
+    // Turn off selection of locked cells. This in on in Excel by default.
+    uint8_t no_select_locked_cells;
+
+    // Turn off selection of unlocked cells. This in on in Excel by default.
+    uint8_t no_select_unlocked_cells;
+
+    // Prevent formatting of cells. 
+    uint8_t format_cells;
+
+    // Prevent formatting of columns. 
+    uint8_t format_columns;
+
+    // Prevent formatting of rows. 
+    uint8_t format_rows;
+
+    // Prevent insertion of columns. 
+    uint8_t insert_columns;
+
+    // Prevent insertion of rows. 
+    uint8_t insert_rows;
+
+    // Prevent insertion of hyperlinks. 
+    uint8_t insert_hyperlinks;
+
+    // Prevent deletion of columns. 
+    uint8_t delete_columns;
+
+    // Prevent deletion of rows. 
+    uint8_t delete_rows;
+
+    // Prevent sorting data. 
+    uint8_t sort;
+
+    // Prevent filtering data. 
+    uint8_t autofilter;
+
+    // Prevent insertion of pivot tables. 
+    uint8_t pivot_tables;
+
+    // Protect scenarios. 
+    uint8_t scenarios;
+
+    // Protect drawing objects. Worksheets only. 
+    uint8_t objects;
+
+    // Turn off chartsheet content protection. 
+    uint8_t no_content;
+
+    // Turn off chartsheet objects. 
+    uint8_t no_objects;
+
+} lxw_protection;
+*/ 
+HB_FUNC( LXW_GET_PROTECTION )
+{
+
+   lxw_protection * hlxw_protection = ( lxw_protection * ) hb_xgrab( sizeof( lxw_protection ) );
+
+    hlxw_protection->no_select_locked_cells   = (uint8_t) hb_parni(1);
+    hlxw_protection->no_select_unlocked_cells = (uint8_t) hb_parni(2);
+    hlxw_protection->format_cells             = (uint8_t) hb_parni(3);
+    hlxw_protection->format_columns           = (uint8_t) hb_parni(4);
+    hlxw_protection->format_rows              = (uint8_t) hb_parni(5);
+    hlxw_protection->insert_columns           = (uint8_t) hb_parni(6);
+    hlxw_protection->insert_rows              = (uint8_t) hb_parni(7);
+    hlxw_protection->insert_hyperlinks        = (uint8_t) hb_parni(8);
+    hlxw_protection->delete_columns           = (uint8_t) hb_parni(9);
+    hlxw_protection->delete_rows              = (uint8_t) hb_parni(10);
+    hlxw_protection->sort                     = (uint8_t) hb_parni(11);
+    hlxw_protection->autofilter               = (uint8_t) hb_parni(12);
+    hlxw_protection->pivot_tables             = (uint8_t) hb_parni(13);
+    hlxw_protection->scenarios                = (uint8_t) hb_parni(14);
+    hlxw_protection->objects                  = (uint8_t) hb_parni(15);
+    hlxw_protection->no_content               = (uint8_t) hb_parni(16);
+    hlxw_protection->no_objects               = (uint8_t) hb_parni(17);
+
+   hb_retptr( hlxw_protection );
 }
 
 #pragma ENDDUMP

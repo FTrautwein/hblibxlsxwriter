@@ -34,24 +34,27 @@ LOCAL workbook, worksheet, chart, font1, font2, font3, font4, font5, font6
     lxw_chart_add_series(chart, NIL, "Sheet1!$A$1:$A$6")
 
     /* Create some fonts to use in the chart.  */
-    font1 = {"name" => "Calibri", "color" => LXW_COLOR_BLUE}
-    font2 = {"name" => "Courier", "color" => 0x92D050}
-    font3 = {"name" => "Arial",   "color" => 0x00B0F0}
-    font4 = {"name" => "Century", "color" => LXW_COLOR_RED}
-    font5 = {"rotation" => -30}
-    font6 = {"bold"      => LXW_TRUE,;
+    font1 = {"name" => "Calibri", "color" => LXW_COLOR_BLUE, "size" => 10 }
+    font2 = {"name" => "Courier", "color" => 0x92D050, "size" => 10 }
+    font3 = {"name" => "Arial",   "color" => 0x00B0F0, "size" => 10 }
+    font4 = {"name" => "Century", "color" => LXW_COLOR_RED, "size" => 10, "rotation" => -30 }
+    font5 = {"rotation" => -30 }
+    font6 = {"name"      => "Calibri",;
+             "bold"      => LXW_TRUE,;
              "italic"    => LXW_TRUE,;
              "underline" => LXW_TRUE,;
-             "color"     => 0x7030A0}
+             "color"     => 0x7030A0,;
+             "size"      => 10      ,;
+             "rotation"  => -30      }
 
     /* Write the chart title with a font. */
     lxw_chart_title_set_name(chart, "Test Results")
-    lxw_chart_title_set_name_font(chart, font1)
+    //lxw_chart_title_set_name_font(chart, font1)
 
     /* Write the Y axis with a font. */
     lxw_chart_axis_set_name(LXW_GET_Y_AXYS(chart), "Units")
-    lxw_chart_axis_set_name_font(LXW_GET_Y_AXYS(chart), font2)
-    lxw_chart_axis_set_num_font(LXW_GET_Y_AXYS(chart), font3)
+    //lxw_chart_axis_set_name_font(LXW_GET_Y_AXYS(chart), font2)
+    //lxw_chart_axis_set_num_font(LXW_GET_Y_AXYS(chart), font3)
 
     /* Write the X axis with a font. */
     lxw_chart_axis_set_name(LXW_GET_X_AXYS(chart), "Month")
@@ -60,7 +63,7 @@ LOCAL workbook, worksheet, chart, font1, font2, font3, font4, font5, font6
 
     /* Display the chart legend at the bottom of the chart. */
     lxw_chart_legend_set_position(chart, LXW_CHART_LEGEND_BOTTOM)
-    lxw_chart_legend_set_font(chart, font6)
+    lxw_chart_legend_set_font(chart, font6 ) //LXW_GET_CHART_FONTS('Arial', 10, LXW_FALSE, LXW_FALSE, LXW_FALSE, 30, 0x7030A0 ) )
 
     /* Insert the chart into the worksheet. */
     lxw_worksheet_insert_chart(worksheet, LXW_CELL("C1"), chart)

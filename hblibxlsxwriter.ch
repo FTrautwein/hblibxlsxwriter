@@ -154,6 +154,9 @@
 
 
 /** Format underline values for format_set_underline(). */
+
+#define LXW_UNDERLINE_NONE    0
+
         /** Single underline */
 #define LXW_UNDERLINE_SINGLE  1
 
@@ -172,12 +175,12 @@
 #define LXW_FONT_SUPERSCRIPT  1
 
         /** Subscript font */
-#define LXW_FONT_SUBSCRIPT  2
+#define LXW_FONT_SUBSCRIPT    2
 
 
 /* lxw_format_diagonal_types */
-#define LXW_DIAGONAL_BORDER_UP  1
-#define LXW_DIAGONAL_BORDER_DOWN  2
+#define LXW_DIAGONAL_BORDER_UP       1
+#define LXW_DIAGONAL_BORDER_DOWN     2
 #define LXW_DIAGONAL_BORDER_UP_DOWN  3
 
 
@@ -257,93 +260,104 @@
 /**
  * @brief Available chart types.
  */
-    /** None. */
-#define LXW_CHART_NONE  0
+   /** None. */
+#DEFINE LXW_CHART_NONE                                   0 
 
     /** Area chart. */
-#define LXW_CHART_AREA  1
+#DEFINE LXW_CHART_AREA                                   1
 
     /** Area chart - stacked. */
-#define LXW_CHART_AREA_STACKED  2
+#DEFINE LXW_CHART_AREA_STACKED                           2 
 
     /** Area chart - percentage stacked. */
-#define LXW_CHART_AREA_STACKED_PERCENT  3
+#DEFINE LXW_CHART_AREA_STACKED_PERCENT                   3
 
     /** Bar chart. */
-#define LXW_CHART_BAR  4
+#DEFINE LXW_CHART_BAR                                    4
 
     /** Bar chart - stacked. */
-#define LXW_CHART_BAR_STACKED  5
+#DEFINE LXW_CHART_BAR_STACKED                            5
 
     /** Bar chart - percentage stacked. */
-#define LXW_CHART_BAR_STACKED_PERCENT  6
+#DEFINE LXW_CHART_BAR_STACKED_PERCENT                    6
 
     /** Column chart. */
-#define LXW_CHART_COLUMN  7
+#DEFINE LXW_CHART_COLUMN                                 7
 
     /** Column chart - stacked. */
-#define LXW_CHART_COLUMN_STACKED  8
+#DEFINE LXW_CHART_COLUMN_STACKED                         8
 
     /** Column chart - percentage stacked. */
-#define LXW_CHART_COLUMN_STACKED_PERCENT  9
+#DEFINE LXW_CHART_COLUMN_STACKED_PERCENT                 9
 
     /** Doughnut chart. */
-#define LXW_CHART_DOUGHNUT  10
+#DEFINE LXW_CHART_DOUGHNUT                              10
 
     /** Line chart. */
-#define LXW_CHART_LINE  11
+#DEFINE LXW_CHART_LINE                                  11
+
+    /** Line chart - stacked. */
+#DEFINE LXW_CHART_LINE_STACKED                          12
+
+    /** Line chart - percentage stacked. */
+#DEFINE LXW_CHART_LINE_STACKED_PERCENT                  13
 
     /** Pie chart. */
-#define LXW_CHART_PIE  12
+#DEFINE LXW_CHART_PIE                                   14
 
     /** Scatter chart. */
-#define LXW_CHART_SCATTER  13
+#DEFINE LXW_CHART_SCATTER                               15
 
     /** Scatter chart - straight. */
-#define LXW_CHART_SCATTER_STRAIGHT  14
+#DEFINE LXW_CHART_SCATTER_STRAIGHT                      16
 
     /** Scatter chart - straight with markers. */
-#define LXW_CHART_SCATTER_STRAIGHT_WITH_MARKERS  15
+#DEFINE LXW_CHART_SCATTER_STRAIGHT_WITH_MARKERS         17
 
     /** Scatter chart - smooth. */
-#define LXW_CHART_SCATTER_SMOOTH  16
+#DEFINE LXW_CHART_SCATTER_SMOOTH                        18
 
     /** Scatter chart - smooth with markers. */
-#define LXW_CHART_SCATTER_SMOOTH_WITH_MARKERS  17
+#DEFINE LXW_CHART_SCATTER_SMOOTH_WITH_MARKERS           19
 
     /** Radar chart. */
-#define LXW_CHART_RADAR  18
+#DEFINE LXW_CHART_RADAR                                 20
 
     /** Radar chart - with markers. */
-#define LXW_CHART_RADAR_WITH_MARKERS  19
+#DEFINE LXW_CHART_RADAR_WITH_MARKERS                    21
 
     /** Radar chart - filled. */
-#define LXW_CHART_RADAR_FILLED  20
-
+#DEFINE LXW_CHART_RADAR_FILLED                          22
 
 /**
  * @brief Chart legend positions.
  */
     /** No chart legend. */
-#define LXW_CHART_LEGEND_NONE             0
+#define LXW_CHART_LEGEND_NONE               0
 
     /** Chart legend positioned at right side. */
-#define LXW_CHART_LEGEND_RIGHT            1
+#define LXW_CHART_LEGEND_RIGHT              1
 
     /** Chart legend positioned at left side. */
-#define XW_CHART_LEGEND_LEFT              2
+#define XW_CHART_LEGEND_LEFT                2
 
     /** Chart legend positioned at top. */
-#define LXW_CHART_LEGEND_TOP              3
+#define LXW_CHART_LEGEND_TOP                3
 
     /** Chart legend positioned at bottom. */
-#define LXW_CHART_LEGEND_BOTTOM           4
+#define LXW_CHART_LEGEND_BOTTOM             4
+
+    /** Chart legend positioned at top right. */
+#define LXW_CHART_LEGEND_TOP_RIGHT          5
 
     /** Chart legend overlaid at right side. */
-#define LXW_CHART_LEGEND_OVERLAY_RIGHT    5
+#define LXW_CHART_LEGEND_OVERLAY_RIGHT      6
 
     /** Chart legend overlaid at left side. */
-#define LXW_CHART_LEGEND_OVERLAY_LEFT     6
+#define LXW_CHART_LEGEND_OVERLAY_LEFT       7
+
+    /** Chart legend overlaid at top right. */
+#define LXW_CHART_LEGEND_OVERLAY_TOP_RIGHT  8
 
 
 /**
@@ -495,3 +509,24 @@
 
     /** Solid diamond pattern. */
 #define LXW_CHART_PATTERN_SOLID_DIAMOND                         48
+
+
+/** Options to control the positioning of worksheet objects such as images
+ *  or charts. See @ref working_with_object_positioning. */
+
+    /** Default positioning for the object. */
+#DEFINE LXW_OBJECT_POSITION_DEFAULT     0
+
+    /** Move and size with the worksheet object with the cells. */
+#DEFINE LXW_OBJECT_MOVE_AND_SIZE        1
+
+    /** Move but don't size with the worksheet object with the cells. */
+#DEFINE LXW_OBJECT_MOVE_DONT_SIZE       2
+
+    /** Don't move or size the worksheet object with the cells. */
+#DEFINE LXW_OBJECT_DONT_MOVE_DONT_SIZE  3
+
+    /** Same as #LXW_OBJECT_MOVE_AND_SIZE except libxlsxwriter applies hidden
+     *  cells after the object is inserted. */
+#DEFINE LXW_OBJECT_MOVE_AND_SIZE_AFTER  4
+ 
