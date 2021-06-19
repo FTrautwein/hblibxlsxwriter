@@ -2695,7 +2695,7 @@ RETURN CallDll( "format_set_font_name", format, font_name )
  * row using the worksheet_set_row() function.
  */
 FUNCTION lxw_format_set_font_size(format, size)
-RETURN CallDll( "format_set_font_size", format, size )
+RETURN CallDll( "format_set_font_size", format, ToDouble(size) )
 
 /**
  * @brief Set the color of the font used in the cell.
